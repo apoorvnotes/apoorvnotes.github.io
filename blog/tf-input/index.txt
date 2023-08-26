@@ -1,0 +1,60 @@
+1:HL["/_next/static/media/2aaf0723e720e8b9-s.p.woff2",{"as":"font","type":"font/woff2"}]
+2:HL["/_next/static/css/494afaf338ab5c7d.css",{"as":"style"}]
+0:["KnsO8z-ENGbRNQP4VRChH",[[["",{"children":["blog",{"children":[["slug","tf-input","d"],{"children":["__PAGE__?{\"slug\":\"tf-input\"}",{}]}]}]},"$undefined","$undefined",true],"$L3",[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/494afaf338ab5c7d.css","precedence":"next"}]],"$L4"]]]]
+5:HL["/_next/static/media/b89f66ecdb077e7f-s.p.woff2",{"as":"font","type":"font/woff2"}]
+6:HL["/_next/static/css/7c9a1029ba1c2cf7.css",{"as":"style"}]
+7:I{"id":7767,"chunks":["272:static/chunks/webpack-9747723084e35360.js","971:static/chunks/fd9d1056-a99b58d3cc150217.js","596:static/chunks/596-ff6b9f15ce906e24.js"],"name":"default","async":false}
+8:I{"id":7920,"chunks":["272:static/chunks/webpack-9747723084e35360.js","971:static/chunks/fd9d1056-a99b58d3cc150217.js","596:static/chunks/596-ff6b9f15ce906e24.js"],"name":"default","async":false}
+3:[null,["$","html",null,{"lang":"en","children":["$","body",null,{"className":"bg-[#1a1a1a] text-neutral-200 __className_20951f","children":["$","main",null,{"className":"flex min-h-screen flex-col items-center py-16 md:py-32 px-6","children":["$","div",null,{"className":"max-w-lg w-full flex flex-col","children":["$","$L7",null,{"parallelRouterKey":"children","segmentPath":["children"],"loading":"$undefined","loadingStyles":"$undefined","hasLoading":false,"error":"$undefined","errorStyles":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","notFound":[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":"404"}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],"notFoundStyles":[],"childProp":{"current":["$","$L7",null,{"parallelRouterKey":"children","segmentPath":["children","blog","children"],"loading":"$undefined","loadingStyles":"$undefined","hasLoading":false,"error":"$undefined","errorStyles":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","notFound":"$undefined","notFoundStyles":"$undefined","childProp":{"current":["$","$L7",null,{"parallelRouterKey":"children","segmentPath":["children","blog","children",["slug","tf-input","d"],"children"],"loading":"$undefined","loadingStyles":"$undefined","hasLoading":false,"error":"$undefined","errorStyles":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","notFound":"$undefined","notFoundStyles":"$undefined","childProp":{"current":["$L9","$La",null],"segment":"__PAGE__?{\"slug\":\"tf-input\"}"},"styles":[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/7c9a1029ba1c2cf7.css","precedence":"next"}]]}],"segment":["slug","tf-input","d"]},"styles":[]}],"segment":"blog"},"styles":[]}]}]}]}]}],null]
+4:[["$","meta","0",{"charSet":"utf-8"}],["$","title","1",{"children":"Short note on tf.data.Dataset"}],["$","meta","2",{"name":"description","content":"Using TensorFlow input pipelines on speech data"}],["$","meta","3",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","4",{"name":"next-size-adjust"}]]
+9:null
+b:Ta83,<p>I work a lot with speech data, so setting up a data pipeline always requires some effort. 
+The dataset is usually huge, and you need a lot of preprocessing to extract good inputs from raw audio. 
+I tried out <a href="https://www.tensorflow.org/api_docs/python/tf/data/Dataset"><strong>tf.data.Dataset</strong></a> in tensorflow 2.1 and it makes things pretty smooth.</p>
+<p>Here&#39;s how you set up a simple pipeline.</p>
+<pre><code class="language-python"># dataset of all paths to files
+file_list = tf.data.Dataset.list_files(&#39;path/to/data/*/*&#39;)
+</code></pre>
+<p>You can iterate over it.</p>
+<pre><code class="language-python">for item in file_list:
+    print(item)
+# tf.Tensor(b&#39;path/to/data/folder1/file1.wav&#39;, shape=(), dtype=string)
+# tf.Tensor(b&#39;path/to/data/folder1/file2.wav&#39;, shape=(), dtype=string)
+# ...
+# ...
+</code></pre>
+<p>Then create a function to load and preprocess each file.</p>
+<pre><code class="language-python"># function to load and preprocess file at said path
+def extract_audio_features(file_path):
+    audio = tf.io.read_file(file_path)
+    audio, sample_rate = tf.audio.decode_wav(audio,desired_channels=1,desired_samples=8000)
+    signals = tf.squeeze(audio)
+    stfts = tf.signal.stft(signals, fft_length=256)
+    spectrograms = tf.math.pow(tf.abs(stfts), 0.5)
+    return spectrograms
+
+# apply above function on each file path
+feats_dataset = file_list.map(extract_audio_features)
+
+# shuffle
+feats_dataset = feats_dataset.shuffle(buffer_size=shuffle_buffer_size)
+
+# repeat so you can iterate over the dataset n times
+# count = -1 =&gt; loop over indefinitely
+feats_dataset = feats_dataset.repeat(count=-1) 
+
+# create batches
+feats_dataset = feats_dataset.batch(4)
+
+# prefetch next n batches in memory ready to be connsumed by your model
+feats_dataset = feats_dataset.prefetch(buffer_size=2)
+</code></pre>
+<p>That&#39;s it! Iterate over this in your training loop, or pass it in a <code>model.fit()</code> function.</p>
+<pre><code class="language-python">for data_batch in feats_dataset:
+    train_step(data_batch)
+</code></pre>
+<p>You don&#39;t have to use all tensorflow functions inside your preprocessing function. Any python function will work.
+Everything is a little faster if you can manage it with tensorflow functions.</p>
+<p>Each file I/O can be expensive. This whole process will be slow if you have a large number of small files.<br>This bottleneck can be resolved by storing your entire dataset as <strong>TFRecord</strong> files, where each <strong>TFRecord</strong> would 
+have the data from multiple small files. So, you will reduce the number of times you need to read a file. I will cover that in another post.</p>
+a:[["$","div",null,{"className":"mb-7 font-light","children":["↖ ",["$","a",null,{"rel":"","target":"","className":" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400","href":"/blog","children":"Back"}]]}],["$","article",null,{"className":"__className_bfc3c1 leading-7 antialiased","children":[["$","h1",null,{"children":"Short note on tf.data.Dataset"}],["$","p",null,{"className":"text-neutral-500","children":"25 April 2020"}],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$b"}}]]}]]

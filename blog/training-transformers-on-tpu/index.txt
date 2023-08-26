@@ -1,0 +1,123 @@
+1:HL["/_next/static/media/2aaf0723e720e8b9-s.p.woff2",{"as":"font","type":"font/woff2"}]
+2:HL["/_next/static/css/494afaf338ab5c7d.css",{"as":"style"}]
+0:["KnsO8z-ENGbRNQP4VRChH",[[["",{"children":["blog",{"children":[["slug","training-transformers-on-tpu","d"],{"children":["__PAGE__?{\"slug\":\"training-transformers-on-tpu\"}",{}]}]}]},"$undefined","$undefined",true],"$L3",[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/494afaf338ab5c7d.css","precedence":"next"}]],"$L4"]]]]
+5:HL["/_next/static/media/b89f66ecdb077e7f-s.p.woff2",{"as":"font","type":"font/woff2"}]
+6:HL["/_next/static/css/7c9a1029ba1c2cf7.css",{"as":"style"}]
+7:I{"id":7767,"chunks":["272:static/chunks/webpack-9747723084e35360.js","971:static/chunks/fd9d1056-a99b58d3cc150217.js","596:static/chunks/596-ff6b9f15ce906e24.js"],"name":"default","async":false}
+8:I{"id":7920,"chunks":["272:static/chunks/webpack-9747723084e35360.js","971:static/chunks/fd9d1056-a99b58d3cc150217.js","596:static/chunks/596-ff6b9f15ce906e24.js"],"name":"default","async":false}
+3:[null,["$","html",null,{"lang":"en","children":["$","body",null,{"className":"bg-[#1a1a1a] text-neutral-200 __className_20951f","children":["$","main",null,{"className":"flex min-h-screen flex-col items-center py-16 md:py-32 px-6","children":["$","div",null,{"className":"max-w-lg w-full flex flex-col","children":["$","$L7",null,{"parallelRouterKey":"children","segmentPath":["children"],"loading":"$undefined","loadingStyles":"$undefined","hasLoading":false,"error":"$undefined","errorStyles":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","notFound":[["$","title",null,{"children":"404: This page could not be found."}],["$","div",null,{"style":{"fontFamily":"system-ui,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif,\"Apple Color Emoji\",\"Segoe UI Emoji\"","height":"100vh","textAlign":"center","display":"flex","flexDirection":"column","alignItems":"center","justifyContent":"center"},"children":["$","div",null,{"children":[["$","style",null,{"dangerouslySetInnerHTML":{"__html":"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}"}}],["$","h1",null,{"className":"next-error-h1","style":{"display":"inline-block","margin":"0 20px 0 0","padding":"0 23px 0 0","fontSize":24,"fontWeight":500,"verticalAlign":"top","lineHeight":"49px"},"children":"404"}],["$","div",null,{"style":{"display":"inline-block"},"children":["$","h2",null,{"style":{"fontSize":14,"fontWeight":400,"lineHeight":"49px","margin":0},"children":"This page could not be found."}]}]]}]}]],"notFoundStyles":[],"childProp":{"current":["$","$L7",null,{"parallelRouterKey":"children","segmentPath":["children","blog","children"],"loading":"$undefined","loadingStyles":"$undefined","hasLoading":false,"error":"$undefined","errorStyles":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","notFound":"$undefined","notFoundStyles":"$undefined","childProp":{"current":["$","$L7",null,{"parallelRouterKey":"children","segmentPath":["children","blog","children",["slug","training-transformers-on-tpu","d"],"children"],"loading":"$undefined","loadingStyles":"$undefined","hasLoading":false,"error":"$undefined","errorStyles":"$undefined","template":["$","$L8",null,{}],"templateStyles":"$undefined","notFound":"$undefined","notFoundStyles":"$undefined","childProp":{"current":["$L9","$La",null],"segment":"__PAGE__?{\"slug\":\"training-transformers-on-tpu\"}"},"styles":[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/7c9a1029ba1c2cf7.css","precedence":"next"}]]}],"segment":["slug","training-transformers-on-tpu","d"]},"styles":[]}],"segment":"blog"},"styles":[]}]}]}]}]}],null]
+4:[["$","meta","0",{"charSet":"utf-8"}],["$","title","1",{"children":"Training Transformers on TPU"}],["$","meta","2",{"name":"description","content":"Training transformers is now super easy thanks to HuggingFace and Tensorflow 2"}],["$","meta","3",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","4",{"name":"next-size-adjust"}]]
+9:null
+b:Te77,<p>This post shows how clean and straightforward it is to use huggingface library and tensorflow 2 to train transformer models on GPU and TPU!</p>
+<p>As of today (April, 2020),
+this is how you fine tune a BERT model on GPU (Same code works for CPU as well).</p>
+<pre><code class="language-python"># load data
+#
+# df = load_data()
+# -----------------------
+# text            , label
+# -----------------------
+# good job.           1
+# oh no!              0
+# .....
+
+# tokenize text
+text_col = df.text.astype(str)
+input_ids = []
+for i in range(0, len(text_col), config.chunk_size):
+    text_chunk = text_col[i:i+config.chunk_size].tolist()
+    encoded = tokenizer.encode_batch(text_chunk)
+    input_ids.extend([enc.ids for enc in encoded])
+
+x_train = np.array(input_ids)
+y_train = df.label.values
+
+# create data loader
+train_dataset = (
+    tf.data.Dataset
+    .from_tensor_slices((x_train, y_train))
+    .repeat()
+    .shuffle(2048)
+    .batch(config.batch_size)
+    .prefetch(tf.data.experimental.AUTOTUNE)
+)
+
+# create model : Input &gt; BERT &gt; Dense
+bert = TFBertModel.from_pretrained(config.MODEL_PATH, config=BertConfig())
+input_ids = layers.Input(shape=(config.maxlen,), dtype=tf.int32)
+sequence_output = bert(input_ids)[0][:, 0, :]
+out = layers.Dense(1, activation=&#39;sigmoid&#39;)(sequence_output)
+classifier = models.Model(inputs=input_ids, outputs=out)
+
+# compile
+classifier.compile(optimizers.Adam(lr=3e-5), 
+                   loss=&#39;binary_crossentropy&#39;, 
+                   metrics=[metrics.AUC()])
+
+# train !
+train_history = classifier.fit(
+    train_dataset,
+    steps_per_epoch=150,
+    epochs=30
+)
+</code></pre>
+<p>And this is how you do the same thing on TPUs. (Few extra lines added to load the model on TPU)</p>
+<pre><code class="language-python"># load data
+#
+# df = load_data()
+# -----------------------
+# text            , label
+# -----------------------
+# good job.           1
+# oh no!              0
+# .....
+
+# create distribution strategy
+tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
+tf.config.experimental_connect_to_cluster(tpu)
+tf.tpu.experimental.initialize_tpu_system(tpu)
+strategy = tf.distribute.experimental.TPUStrategy(tpu)
+
+# create model : Input &gt; BERT &gt; Dense
+with strategy.scope():
+    bert = TFBertModel.from_pretrained(config.MODEL_PATH, config=BertConfig())
+    input_ids = layers.Input(shape=(config.maxlen,), dtype=tf.int32)
+    sequence_output = bert(input_ids)[0][:, 0, :]
+    out = layers.Dense(1, activation=&#39;sigmoid&#39;)(sequence_output)
+    classifier = models.Model(inputs=input_ids, outputs=out)
+    
+    classifier.compile(optimizers.Adam(lr=3e-5), 
+                   loss=&#39;binary_crossentropy&#39;, 
+                   metrics=[metrics.AUC()])
+    
+# tokenize text
+text_col = df.text.astype(str)
+input_ids = []
+for i in tqdm(range(0, len(text_col), config.chunk_size)):
+    text_chunk = text_col[i:i+config.chunk_size].tolist()
+    encoded = tokenizer.encode_batch(text_chunk)
+    input_ids.extend([enc.ids for enc in encoded])
+
+x_train = np.array(input_ids)
+y_train = df.label.values
+
+# create data loader
+train_dataset = (
+    tf.data.Dataset
+    .from_tensor_slices((x_train, y_train))
+    .repeat()
+    .shuffle(2048)
+    .batch(config.batch_size)
+    .prefetch(tf.data.experimental.AUTOTUNE)
+)
+
+# train !
+train_history = classifier.fit(
+    train_dataset,
+    steps_per_epoch=150,
+    epochs=30
+)
+</code></pre>
+<p>Its honestly amazing how easy this is compared to the old tensorflow 1.1x flow in the original code base of BERT paper!</p>
+<p>This abstraction and creation of clean APIs for latest deep learning techniques and models will continue to lower the barrier for using them in applications.</p>
+a:[["$","div",null,{"className":"mb-7 font-light","children":["↖ ",["$","a",null,{"rel":"","target":"","className":" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400","href":"/blog","children":"Back"}]]}],["$","article",null,{"className":"__className_bfc3c1 leading-7 antialiased","children":[["$","h1",null,{"children":"Training Transformers on TPU"}],["$","p",null,{"className":"text-neutral-500","children":"19 April 2020"}],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$b"}}]]}]]

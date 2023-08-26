@@ -1,0 +1,412 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="preload" as="font" href="/_next/static/media/2aaf0723e720e8b9-s.p.woff2" crossorigin="" type="font/woff2"/><link rel="preload" as="font" href="/_next/static/media/b89f66ecdb077e7f-s.p.woff2" crossorigin="" type="font/woff2"/><link rel="stylesheet" href="/_next/static/css/494afaf338ab5c7d.css" data-precedence="next"/><link rel="stylesheet" href="/_next/static/css/7c9a1029ba1c2cf7.css" data-precedence="next"/><link rel="preload" href="/_next/static/chunks/webpack-9747723084e35360.js" as="script" fetchPriority="low"/><script src="/_next/static/chunks/fd9d1056-a99b58d3cc150217.js" async=""></script><script src="/_next/static/chunks/596-ff6b9f15ce906e24.js" async=""></script><script src="/_next/static/chunks/main-app-4f41eba75df82bd8.js" async=""></script><title>Few shot classification with Prototypical Networks</title><meta name="description" content="Implementing prototypical networks in Pytorch"/><meta name="next-size-adjust"/><script src="/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js" noModule=""></script></head><body class="bg-[#1a1a1a] text-neutral-200 __className_20951f"><main class="flex min-h-screen flex-col items-center py-16 md:py-32 px-6"><div class="max-w-lg w-full flex flex-col"><div class="mb-7 font-light">↖ <a rel="" target="" class=" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400" href="/blog">Back</a></div><article class="__className_bfc3c1 leading-7 antialiased"><h1>Few shot classification with Prototypical Networks</h1><p class="text-neutral-500">14 December 2020</p><div><p>N shot classification is a task where the classifier has access to only N examples of each class in the test set. 
+Solutions to this task are really useful in real world scenarios where a lot of labelled data is not present or 
+new classes are being added frequently.</p>
+<p>Prototypical Networks are a relatively simple method to perform this task, and they produce excellent results.
+They do so by mapping each data point to a representation vector. The vectors corresponding the N exmaples of each class are merged to create a prototype vector for each class. 
+A test data point can be classified by computing its distances to prototype representations of each class.</p>
+<p>Following is my re-implementation of the network in Pytorch.</p>
+<p>References:  </p>
+<ul>
+<li><a href="https://arxiv.org/pdf/1703.05175.pdf">Prototypical Networks for Few-shot Learning</a></li>
+<li><a href="https://github.com/yinboc/prototypical-network-pytorch">Github repo by yinboc</a></li>
+</ul>
+<p><code>BaseModel</code> is a class containing a generic training loop and some functions that can be overwritten to execute any code at any point in the loop.</p>
+<pre><code class="language-python">import tensorflow as tf  # For keras like progress bars in the training loop :)
+
+class BaseModel:
+    
+    def __init__(self, ckpt_name=&#39;model.pt&#39;):
+        self.ckpt_name = ckpt_name
+        self.start_epoch = 0
+        self.best_loss = 10000
+    
+    def on_val_end(self):
+        val_loss = self.val_dict[self.monitor_metric]
+        if val_loss &lt; self.best_loss:
+            self.best_loss = val_loss
+            self.save()
+            
+    def save(self):
+        raise NotImplementedError
+            
+            
+    def on_train_start(self):
+        pass
+    
+    
+    def on_epoch_end(self):
+        pass
+    
+    
+    def on_fit_end(self):
+        pass
+    
+    
+    def on_epoch_start(self):
+        pass
+                        
+                        
+    def fit(self, dl, valid_dl=None, monitor_metric=&#39;val_loss&#39;, n_epochs=1):
+        self.dl = dl
+        self.valid_dl = valid_dl
+        self.n_epochs = n_epochs
+        self.monitor_metric = monitor_metric
+        
+        self.on_train_start()
+        for epoch in range(n_epochs):
+            
+            self.on_epoch_start()
+            self.epoch = epoch
+            self.n_batches = len(dl)
+            print(f&#39;Epoch {epoch+1}/{n_epochs}&#39;)
+            pbar = tf.keras.utils.Progbar(target=self.n_batches)
+            
+            for idx, batch in enumerate(dl):
+                
+                self.batch_idx = idx
+                loss_dict = self.train_step(epoch, idx, batch) 
+                pbar.update(idx, values=list(loss_dict.items()))
+                
+            if valid_dl:
+                self.validate()
+                pbar.update(self.n_batches, values=list(self.val_dict.items()))
+                self.on_val_end()
+            else:
+                pbar.update(self.n_batches, values=None)
+            
+            self.on_epoch_end()
+            
+        self.on_fit_end()
+</code></pre>
+<h2>Prepare datasets</h2>
+<p><code>ProtoData</code> is a class that creates batches for training and validation. 
+It needs to be initialised with a regular classification style pytorch dataset where each item is a tuple of (inputs, label). </p>
+<p>It is very similar to a pytorch Dataset class except that the <code>__getitem__</code> function returns a batch and not a single example. 
+To make it enumerable, the <code>__getitem__</code> function raises an IndexError on index &gt;= max length.</p>
+<p>Algorithm for creating a single batch:<br>Given,<br>number of classes : <code>nway</code><br>set of all labels : <code>labels</code><br>number of support examples per class : <code>nshot</code><br>number of query inputs per class : <code>nquery</code></p>
+<ol>
+<li>select <code>nway</code> classes from the set of all labels</li>
+<li>select <code>nshot</code> support inputs from each class </li>
+<li>select <code>nquery</code> query inputs from each class</li>
+<li>create a batch with the following order.  <pre><code class="language-text">[class 1 support 1, class 1 support 2 ... class 2 support 1, class 2 support 2, ... 
+class 1 query 1, class 1 query 2, ... class 2 query 1, class 2 query 2 ... ]
+</code></pre>
+</li>
+</ol>
+<pre><code class="language-python">import torch
+import random
+    
+class ProtoData:
+    def __init__(self, ds, nshot, nquery, nway, labels, num_batches):
+        self.nway = nway
+        self.nshot = nshot
+        self.nquery = nquery
+        self.labels = labels
+        self.num_batches = num_batches
+        self.ds = ds
+        self.d1 = ds[0][0].shape[0]
+        self.d2 = ds[0][0].shape[1]
+        self.d3 = ds[0][0].shape[2]
+        label_idx = {}
+        for i in range(len(ds)):
+            l = ds[i][1]
+            if l not in label_idx:
+                label_idx[l] = []
+            label_idx[l].append(i)
+        self.label_idx = label_idx
+        
+    def __len__(self):
+        return self.num_batches
+    
+    def __getitem__(self, idx):
+        &quot;&quot;&quot;
+        batch = [
+            class1_1,  class1_2, ... , class2_1, class2_2, ... # supports
+            class1_query1, class1_query2,...,class2_query1, class1_query2,...]
+        &quot;&quot;&quot;
+        select_labels = random.sample(self.labels, self.nway)
+        if idx &gt;= self.num_batches:
+            raise IndexError
+        bs = self.nway * self.nshot + self.nquery * self.nway
+        batch = torch.zeros(bs,self.d1, self.d2, self.d3)
+        for class_idx,c in enumerate(select_labels):
+            shuffled_idx = random.sample(self.label_idx[c], len(self.label_idx[c]))
+            selection = shuffled_idx[:self.nshot + self.nquery]
+            for selection_idx,i in enumerate(selection):
+                if selection_idx &lt; self.nshot:
+                    batch[class_idx*self.nshot+selection_idx,:,:,:] = self.ds[i][0]
+                else:
+                    batch[self.nshot*self.nway + class_idx*self.nquery + (selection_idx - self.nshot),:,:,:] = self.ds[i][0]
+        return batch
+</code></pre>
+<p>Omnigot is a dataset used to benchmark few shot image classification methods. 
+It contains single channel images of various characters from different languages.</p>
+<pre><code class="language-python">import torchvision
+
+ds = torchvision.datasets.Omniglot(
+    root=&#39;.&#39;, download=True, transform=torchvision.transforms.ToTensor()
+)
+
+from matplotlib.pyplot import imshow
+import matplotlib.pyplot as plt
+
+def tensor_to_img(x):
+    data = x.squeeze().numpy() 
+    plt.figure()
+    plt.imshow(data, cmap=&#39;gray&#39;, vmin=0, vmax=1)
+
+tensor_to_img(ds[900][0])  # plot single image
+</code></pre>
+<img src="/assets/omniglot_sample.png">
+Sample image from the dataset. Each image contains a handwritten character from one of 50 different alphabets.
+
+<h2>Create a prototypical network</h2>
+<p>The <code>ProtoNet</code> class contains the entire training and validation algorithm. 
+It inherits from the <code>BaseModel</code> class defined above, and overwrites the following functions.</p>
+<pre><code class="language-text">- on_train_start : putting everything on GPUs, if available.
+- train_step: processing a single batch of data and updating the encoder weights
+- save and load : for saving and loading the state of the encoder and the optimizer
+- on_epoch_end : running validation on unseen labels using &#39;few&#39; labels 
+                 and printing the classification accuracy
+</code></pre>
+<p>The function <code>train_step</code> executes the following steps.  </p>
+<ol>
+<li>Split the batch into supports and queries. For N shot classification, we will have N support examples per class. 
+The encoder network converts every support and query input into a representation vector. </li>
+<li>Calculate the mean of support representations from each class to create its prototype.</li>
+<li>Select the predicted class for a query input by picking the class with the nearest prototype to its representation.</li>
+<li>Calculate cross entropy loss with query example labels and logits. The logits for a query are negative distances of query representation 
+from each prototype representation.</li>
+</ol>
+<pre><code class="language-python">import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class ProtoNet(BaseModel):
+    def __init__(self, enc, nshot, nway, nquery, lr=0.001):
+        super().__init__()
+        self.enc = enc
+        self.nshot = nshot
+        self.nway = nway
+        self.nquery = nquery
+        self.opt = torch.optim.Adam(self.enc.parameters(), lr=lr)
+        self.loss_fn = torch.nn.NLLLoss()
+
+    def on_train_start(self):
+        self.device = &#39;cuda&#39; if torch.cuda.is_available() else &#39;cpu&#39;
+        self.loss_fn.to(self.device)
+        self.enc = nn.DataParallel(self.enc).to(self.device)
+        self.epoch = -1
+        
+    def compute_prototypes(self, support, k, n):
+        class_prototypes = support.reshape(k, n, -1).mean(dim=1)
+        return class_prototypes
+    
+    def pairwise_distances(self, x, y):
+        &quot;&quot;&quot; Calculate l2 distance between each element of x and y.
+        Cosine similarity can also be used
+        &quot;&quot;&quot;
+        n_x = x.shape[0]
+        n_y = y.shape[0]
+        
+        distances = (
+            x.unsqueeze(1).expand(n_x, n_y, -1) -
+            y.unsqueeze(0).expand(n_x, n_y, -1)
+        ).pow(2).sum(dim=2)
+        return distances
+
+    def train_step(self, epoch, idx, x):
+        self.enc.train()
+        x = x.to(self.device)
+        embeddings = self.enc(x)
+
+        support = embeddings[:self.nshot*self.nway]
+        queries = embeddings[self.nshot*self.nway:]
+        prototypes = self.compute_prototypes(support, self.nway, self.nshot)
+        
+        distances = self.pairwise_distances(queries, prototypes)  # (num_queries, k_way)
+
+        # Calculate logits with softmax
+        log_p_y = (-distances).log_softmax(dim=1)
+        
+        # labels = [class1 * nquery, class2 * nquery, ...]
+        y = []
+        for c in range(self.nway):
+            y.extend([c]*self.nquery)
+        y = torch.tensor(y).to(self.device)
+        loss = self.loss_fn(log_p_y, y)
+        
+        self.opt.zero_grad()
+        loss.backward()
+        self.opt.step()
+        return {&quot;loss&quot;: loss.item()}
+
+    def save(self):
+        torch.save(
+            {
+                &quot;epoch&quot;: self.epoch+1+self.start_epoch,
+                &quot;enc&quot;: self.enc.state_dict(),
+                &quot;opt&quot;: self.opt.state_dict()
+            },
+            self.ckpt_name,
+        )
+        
+    def load(self, ckpt_path):
+        ckpt = torch.load(ckpt_path)
+        self.opt.load_state_dict(ckpt[&#39;opt&#39;])
+        self.enc.load_state_dict(ckpt[&#39;enc&#39;])
+        self.start_epoch = ckpt[&#39;epoch&#39;]
+
+    def on_epoch_end(self):
+        if not hasattr(self, &#39;test_dl&#39;):
+            print(&#39;No test dataloader&#39;)
+            return
+        
+        nshot = self.test_nshot
+        nquery = self.test_nquery
+        nway = self.test_nway
+        self.enc.eval()
+        acc = []
+        bs = []
+        for x in self.test_dl:
+            x = x.to(self.device)
+            with torch.no_grad():
+                embeddings = self.enc(x)
+
+            support = embeddings[:nshot*nway]
+            queries = embeddings[nshot*nway:]
+            prototypes = self.compute_prototypes(support, nway, nshot)
+
+            distances = self.pairwise_distances(queries, prototypes, &#39;l2&#39;)
+
+            log_p_y = (-distances).log_softmax(dim=1)
+
+            y_pred = (-distances).softmax(dim=1)
+            preds = torch.argmax(y_pred, dim=1)
+            
+            y = []
+            for c in range(nway):
+                y.extend([c]*nquery)
+            y = torch.tensor(y).to(self.device)
+            
+            batch_acc = (preds==y).cpu().float().mean().item()
+            acc.append(batch_acc)
+            bs.append(x.shape[0])
+
+        numerator = sum([size * _ for size,_ in zip(bs,acc)])
+        denominator = sum(bs)
+        acc = numerator / denominator
+        print(f&#39;epoch {self.epoch+1}: few shot accuracy {acc:.4f}&#39;)
+</code></pre>
+<p>Define a regular CNN as encoder. Create instances of training and validation datasets.<br>Experiment details (similar to the paper):  </p>
+<ul>
+<li>1 support example per class, for both training and evaluation  </li>
+<li>60 classes during training, 5 classes during evaluation.  </li>
+<li>5 query inputs, for both training and evaluation.</li>
+</ul>
+<pre><code class="language-python">def conv_block(in_channels, out_channels):
+    bn = nn.BatchNorm2d(out_channels)
+    nn.init.uniform_(bn.weight)
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, 3, padding=1),
+        bn,
+        nn.ReLU(),
+        nn.MaxPool2d(2)
+    )
+
+
+class Convnet(nn.Module):
+
+    def __init__(self, x_dim=1, hid_dim=64, z_dim=64):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            conv_block(x_dim, hid_dim),
+            conv_block(hid_dim, hid_dim),
+            conv_block(hid_dim, hid_dim),
+            conv_block(hid_dim, hid_dim),
+            conv_block(hid_dim, hid_dim),
+            conv_block(hid_dim, z_dim),
+        )
+        self.fc1 = nn.Linear(64,64)
+        self.fc2 = nn.Linear(64,32)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc2(self.relu(self.fc1(x)))
+        return x
+        
+
+enc = Convnet()
+nshot = 1
+nway = 60
+test_nway = 5
+nquery = 5
+model = ProtoNet(enc, nshot=nshot, nway=nway, nquery=nquery, lr=0.001)
+proto_loader = ProtoData(
+    ds, 
+    nshot=nshot, 
+    nquery=nquery, 
+    nway=nway, 
+    labels=[i for i in range(900)], # labels 0-899 for training
+    num_batches=100
+)
+model.test_dl = ProtoData(
+    ds, 
+    nshot=nshot, 
+    nquery=nquery, 
+    nway=test_nway, 
+    labels=[(901 + i) for i in range(50)], # labels 901-950 for testing
+    num_batches=100
+)
+model.test_nshot = nshot
+model.test_nway = test_nway
+model.test_nquery = nquery
+</code></pre>
+<h2>Train</h2>
+<pre><code class="language-python">model.fit(proto_loader, n_epochs=10)
+</code></pre>
+<pre><code class="language-text">Epoch 1/10
+100/100 [==============================] - 35s 347ms/step - loss: 1.8391
+epoch 1: few shot accuracy 0.8932
+Epoch 2/10
+100/100 [==============================] - 35s 348ms/step - loss: 0.7875
+epoch 2: few shot accuracy 0.9136
+Epoch 3/10
+100/100 [==============================] - 35s 345ms/step - loss: 0.5544
+epoch 3: few shot accuracy 0.9444
+Epoch 4/10
+100/100 [==============================] - 34s 345ms/step - loss: 0.4112
+epoch 4: few shot accuracy 0.9524
+Epoch 5/10
+100/100 [==============================] - 34s 343ms/step - loss: 0.3292
+epoch 5: few shot accuracy 0.9656
+Epoch 6/10
+100/100 [==============================] - 34s 344ms/step - loss: 0.2968
+epoch 6: few shot accuracy 0.9608
+Epoch 7/10
+100/100 [==============================] - 35s 345ms/step - loss: 0.2524
+epoch 7: few shot accuracy 0.9688
+Epoch 8/10
+100/100 [==============================] - 34s 345ms/step - loss: 0.2242
+epoch 8: few shot accuracy 0.9648
+Epoch 9/10
+100/100 [==============================] - 34s 343ms/step - loss: 0.1958
+epoch 9: few shot accuracy 0.9672
+Epoch 10/10
+100/100 [==============================] - 34s 343ms/step - loss: 0.2011
+epoch 10: few shot accuracy 0.9664
+</code></pre>
+<h2>Notes</h2>
+<ol>
+<li>The omniglot dataset provided by torchvision and the one used by the authors of the original paper seem to be slightly different.
+The above code still performs well in 1 shot setup shown above and in my other experiments.</li>
+<li>If we expect the model to perform classification between
+10 classes based on 2 examples/class, it is best to keep <code>nshot = 2</code> and <code>nway &gt;= 10</code> during training.</li>
+<li>The distance metric between a prototype and a query representation can also be calculated using cosine distance, but 
+the authors point out that euclidian distance works better.</li>
+</ol>
+</div></article></div></main><script src="/_next/static/chunks/webpack-9747723084e35360.js" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push([1,"1:HL[\"/_next/static/media/2aaf0723e720e8b9-s.p.woff2\",{\"as\":\"font\",\"type\":\"font/woff2\"}]\n2:HL[\"/_next/static/css/494afaf338ab5c7d.css\",{\"as\":\"style\"}]\n0:\"$L3\"\n"])</script><script>self.__next_f.push([1,"4:HL[\"/_next/static/media/b89f66ecdb077e7f-s.p.woff2\",{\"as\":\"font\",\"type\":\"font/woff2\"}]\n5:HL[\"/_next/static/css/7c9a1029ba1c2cf7.css\",{\"as\":\"style\"}]\n"])</script><script>self.__next_f.push([1,"6:I{\"id\":7948,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\n8:I{\"id\":6628,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"\",\"async\":false}\n9:I{\"id\":7767,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"5"])</script><script>self.__next_f.push([1,"96:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\na:I{\"id\":7920,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\n"])</script><script>self.__next_f.push([1,"3:[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/494afaf338ab5c7d.css\",\"precedence\":\"next\"}]],[\"$\",\"$L6\",null,{\"buildId\":\"KnsO8z-ENGbRNQP4VRChH\",\"assetPrefix\":\"\",\"initialCanonicalUrl\":\"/blog/prototypical-networks/\",\"initialTree\":[\"\",{\"children\":[\"blog\",{\"children\":[[\"slug\",\"prototypical-networks\",\"d\"],{\"children\":[\"__PAGE__?{\\\"slug\\\":\\\"prototypical-networks\\\"}\",{}]}]}]},\"$undefined\",\"$undefined\",true],\"initialHead\":[false,\"$L7\"],\"globalErrorComponent\":\"$8\",\"children\":[null,[\"$\",\"html\",null,{\"lang\":\"en\",\"children\":[\"$\",\"body\",null,{\"className\":\"bg-[#1a1a1a] text-neutral-200 __className_20951f\",\"children\":[\"$\",\"main\",null,{\"className\":\"flex min-h-screen flex-col items-center py-16 md:py-32 px-6\",\"children\":[\"$\",\"div\",null,{\"className\":\"max-w-lg w-full flex flex-col\",\"children\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":\"404\"}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],\"notFoundStyles\":[],\"childProp\":{\"current\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"blog\",\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"childProp\":{\"current\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"blog\",\"children\",[\"slug\",\"prototypical-networks\",\"d\"],\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"childProp\":{\"current\":[\"$Lb\",\"$Lc\",null],\"segment\":\"__PAGE__?{\\\"slug\\\":\\\"prototypical-networks\\\"}\"},\"styles\":[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/7c9a1029ba1c2cf7.css\",\"precedence\":\"next\"}]]}],\"segment\":[\"slug\",\"prototypical-networks\",\"d\"]},\"styles\":[]}],\"segment\":\"blog\"},\"styles\":[]}]}]}]}]}],null]}]]\n"])</script><script>self.__next_f.push([1,"7:[[\"$\",\"meta\",\"0\",{\"charSet\":\"utf-8\"}],[\"$\",\"title\",\"1\",{\"children\":\"Few shot classification with Prototypical Networks\"}],[\"$\",\"meta\",\"2\",{\"name\":\"description\",\"content\":\"Implementing prototypical networks in Pytorch\"}],[\"$\",\"meta\",\"3\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}],[\"$\",\"meta\",\"4\",{\"name\":\"next-size-adjust\"}]]\nb:null\nd:T3f0f,"])</script><script>self.__next_f.push([1,"\u003cp\u003eN shot classification is a task where the classifier has access to only N examples of each class in the test set. \nSolutions to this task are really useful in real world scenarios where a lot of labelled data is not present or \nnew classes are being added frequently.\u003c/p\u003e\n\u003cp\u003ePrototypical Networks are a relatively simple method to perform this task, and they produce excellent results.\nThey do so by mapping each data point to a representation vector. The vectors corresponding the N exmaples of each class are merged to create a prototype vector for each class. \nA test data point can be classified by computing its distances to prototype representations of each class.\u003c/p\u003e\n\u003cp\u003eFollowing is my re-implementation of the network in Pytorch.\u003c/p\u003e\n\u003cp\u003eReferences:  \u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003e\u003ca href=\"https://arxiv.org/pdf/1703.05175.pdf\"\u003ePrototypical Networks for Few-shot Learning\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href=\"https://github.com/yinboc/prototypical-network-pytorch\"\u003eGithub repo by yinboc\u003c/a\u003e\u003c/li\u003e\n\u003c/ul\u003e\n\u003cp\u003e\u003ccode\u003eBaseModel\u003c/code\u003e is a class containing a generic training loop and some functions that can be overwritten to execute any code at any point in the loop.\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003eimport tensorflow as tf  # For keras like progress bars in the training loop :)\n\nclass BaseModel:\n    \n    def __init__(self, ckpt_name=\u0026#39;model.pt\u0026#39;):\n        self.ckpt_name = ckpt_name\n        self.start_epoch = 0\n        self.best_loss = 10000\n    \n    def on_val_end(self):\n        val_loss = self.val_dict[self.monitor_metric]\n        if val_loss \u0026lt; self.best_loss:\n            self.best_loss = val_loss\n            self.save()\n            \n    def save(self):\n        raise NotImplementedError\n            \n            \n    def on_train_start(self):\n        pass\n    \n    \n    def on_epoch_end(self):\n        pass\n    \n    \n    def on_fit_end(self):\n        pass\n    \n    \n    def on_epoch_start(self):\n        pass\n                        \n                        \n    def fit(self, dl, valid_dl=None, monitor_metric=\u0026#39;val_loss\u0026#39;, n_epochs=1):\n        self.dl = dl\n        self.valid_dl = valid_dl\n        self.n_epochs = n_epochs\n        self.monitor_metric = monitor_metric\n        \n        self.on_train_start()\n        for epoch in range(n_epochs):\n            \n            self.on_epoch_start()\n            self.epoch = epoch\n            self.n_batches = len(dl)\n            print(f\u0026#39;Epoch {epoch+1}/{n_epochs}\u0026#39;)\n            pbar = tf.keras.utils.Progbar(target=self.n_batches)\n            \n            for idx, batch in enumerate(dl):\n                \n                self.batch_idx = idx\n                loss_dict = self.train_step(epoch, idx, batch) \n                pbar.update(idx, values=list(loss_dict.items()))\n                \n            if valid_dl:\n                self.validate()\n                pbar.update(self.n_batches, values=list(self.val_dict.items()))\n                self.on_val_end()\n            else:\n                pbar.update(self.n_batches, values=None)\n            \n            self.on_epoch_end()\n            \n        self.on_fit_end()\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003ePrepare datasets\u003c/h2\u003e\n\u003cp\u003e\u003ccode\u003eProtoData\u003c/code\u003e is a class that creates batches for training and validation. \nIt needs to be initialised with a regular classification style pytorch dataset where each item is a tuple of (inputs, label). \u003c/p\u003e\n\u003cp\u003eIt is very similar to a pytorch Dataset class except that the \u003ccode\u003e__getitem__\u003c/code\u003e function returns a batch and not a single example. \nTo make it enumerable, the \u003ccode\u003e__getitem__\u003c/code\u003e function raises an IndexError on index \u0026gt;= max length.\u003c/p\u003e\n\u003cp\u003eAlgorithm for creating a single batch:\u003cbr\u003eGiven,\u003cbr\u003enumber of classes : \u003ccode\u003enway\u003c/code\u003e\u003cbr\u003eset of all labels : \u003ccode\u003elabels\u003c/code\u003e\u003cbr\u003enumber of support examples per class : \u003ccode\u003enshot\u003c/code\u003e\u003cbr\u003enumber of query inputs per class : \u003ccode\u003enquery\u003c/code\u003e\u003c/p\u003e\n\u003col\u003e\n\u003cli\u003eselect \u003ccode\u003enway\u003c/code\u003e classes from the set of all labels\u003c/li\u003e\n\u003cli\u003eselect \u003ccode\u003enshot\u003c/code\u003e support inputs from each class \u003c/li\u003e\n\u003cli\u003eselect \u003ccode\u003enquery\u003c/code\u003e query inputs from each class\u003c/li\u003e\n\u003cli\u003ecreate a batch with the following order.  \u003cpre\u003e\u003ccode class=\"language-text\"\u003e[class 1 support 1, class 1 support 2 ... class 2 support 1, class 2 support 2, ... \nclass 1 query 1, class 1 query 2, ... class 2 query 1, class 2 query 2 ... ]\n\u003c/code\u003e\u003c/pre\u003e\n\u003c/li\u003e\n\u003c/ol\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003eimport torch\nimport random\n    \nclass ProtoData:\n    def __init__(self, ds, nshot, nquery, nway, labels, num_batches):\n        self.nway = nway\n        self.nshot = nshot\n        self.nquery = nquery\n        self.labels = labels\n        self.num_batches = num_batches\n        self.ds = ds\n        self.d1 = ds[0][0].shape[0]\n        self.d2 = ds[0][0].shape[1]\n        self.d3 = ds[0][0].shape[2]\n        label_idx = {}\n        for i in range(len(ds)):\n            l = ds[i][1]\n            if l not in label_idx:\n                label_idx[l] = []\n            label_idx[l].append(i)\n        self.label_idx = label_idx\n        \n    def __len__(self):\n        return self.num_batches\n    \n    def __getitem__(self, idx):\n        \u0026quot;\u0026quot;\u0026quot;\n        batch = [\n            class1_1,  class1_2, ... , class2_1, class2_2, ... # supports\n            class1_query1, class1_query2,...,class2_query1, class1_query2,...]\n        \u0026quot;\u0026quot;\u0026quot;\n        select_labels = random.sample(self.labels, self.nway)\n        if idx \u0026gt;= self.num_batches:\n            raise IndexError\n        bs = self.nway * self.nshot + self.nquery * self.nway\n        batch = torch.zeros(bs,self.d1, self.d2, self.d3)\n        for class_idx,c in enumerate(select_labels):\n            shuffled_idx = random.sample(self.label_idx[c], len(self.label_idx[c]))\n            selection = shuffled_idx[:self.nshot + self.nquery]\n            for selection_idx,i in enumerate(selection):\n                if selection_idx \u0026lt; self.nshot:\n                    batch[class_idx*self.nshot+selection_idx,:,:,:] = self.ds[i][0]\n                else:\n                    batch[self.nshot*self.nway + class_idx*self.nquery + (selection_idx - self.nshot),:,:,:] = self.ds[i][0]\n        return batch\n\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eOmnigot is a dataset used to benchmark few shot image classification methods. \nIt contains single channel images of various characters from different languages.\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003eimport torchvision\n\nds = torchvision.datasets.Omniglot(\n    root=\u0026#39;.\u0026#39;, download=True, transform=torchvision.transforms.ToTensor()\n)\n\nfrom matplotlib.pyplot import imshow\nimport matplotlib.pyplot as plt\n\ndef tensor_to_img(x):\n    data = x.squeeze().numpy() \n    plt.figure()\n    plt.imshow(data, cmap=\u0026#39;gray\u0026#39;, vmin=0, vmax=1)\n\ntensor_to_img(ds[900][0])  # plot single image\n\u003c/code\u003e\u003c/pre\u003e\n\u003cimg src=\"/assets/omniglot_sample.png\"\u003e\nSample image from the dataset. Each image contains a handwritten character from one of 50 different alphabets.\n\n\u003ch2\u003eCreate a prototypical network\u003c/h2\u003e\n\u003cp\u003eThe \u003ccode\u003eProtoNet\u003c/code\u003e class contains the entire training and validation algorithm. \nIt inherits from the \u003ccode\u003eBaseModel\u003c/code\u003e class defined above, and overwrites the following functions.\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-text\"\u003e- on_train_start : putting everything on GPUs, if available.\n- train_step: processing a single batch of data and updating the encoder weights\n- save and load : for saving and loading the state of the encoder and the optimizer\n- on_epoch_end : running validation on unseen labels using \u0026#39;few\u0026#39; labels \n                 and printing the classification accuracy\n\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eThe function \u003ccode\u003etrain_step\u003c/code\u003e executes the following steps.  \u003c/p\u003e\n\u003col\u003e\n\u003cli\u003eSplit the batch into supports and queries. For N shot classification, we will have N support examples per class. \nThe encoder network converts every support and query input into a representation vector. \u003c/li\u003e\n\u003cli\u003eCalculate the mean of support representations from each class to create its prototype.\u003c/li\u003e\n\u003cli\u003eSelect the predicted class for a query input by picking the class with the nearest prototype to its representation.\u003c/li\u003e\n\u003cli\u003eCalculate cross entropy loss with query example labels and logits. The logits for a query are negative distances of query representation \nfrom each prototype representation.\u003c/li\u003e\n\u003c/ol\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003eimport numpy as np\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\n\n\nclass ProtoNet(BaseModel):\n    def __init__(self, enc, nshot, nway, nquery, lr=0.001):\n        super().__init__()\n        self.enc = enc\n        self.nshot = nshot\n        self.nway = nway\n        self.nquery = nquery\n        self.opt = torch.optim.Adam(self.enc.parameters(), lr=lr)\n        self.loss_fn = torch.nn.NLLLoss()\n\n    def on_train_start(self):\n        self.device = \u0026#39;cuda\u0026#39; if torch.cuda.is_available() else \u0026#39;cpu\u0026#39;\n        self.loss_fn.to(self.device)\n        self.enc = nn.DataParallel(self.enc).to(self.device)\n        self.epoch = -1\n        \n    def compute_prototypes(self, support, k, n):\n        class_prototypes = support.reshape(k, n, -1).mean(dim=1)\n        return class_prototypes\n    \n    def pairwise_distances(self, x, y):\n        \u0026quot;\u0026quot;\u0026quot; Calculate l2 distance between each element of x and y.\n        Cosine similarity can also be used\n        \u0026quot;\u0026quot;\u0026quot;\n        n_x = x.shape[0]\n        n_y = y.shape[0]\n        \n        distances = (\n            x.unsqueeze(1).expand(n_x, n_y, -1) -\n            y.unsqueeze(0).expand(n_x, n_y, -1)\n        ).pow(2).sum(dim=2)\n        return distances\n\n    def train_step(self, epoch, idx, x):\n        self.enc.train()\n        x = x.to(self.device)\n        embeddings = self.enc(x)\n\n        support = embeddings[:self.nshot*self.nway]\n        queries = embeddings[self.nshot*self.nway:]\n        prototypes = self.compute_prototypes(support, self.nway, self.nshot)\n        \n        distances = self.pairwise_distances(queries, prototypes)  # (num_queries, k_way)\n\n        # Calculate logits with softmax\n        log_p_y = (-distances).log_softmax(dim=1)\n        \n        # labels = [class1 * nquery, class2 * nquery, ...]\n        y = []\n        for c in range(self.nway):\n            y.extend([c]*self.nquery)\n        y = torch.tensor(y).to(self.device)\n        loss = self.loss_fn(log_p_y, y)\n        \n        self.opt.zero_grad()\n        loss.backward()\n        self.opt.step()\n        return {\u0026quot;loss\u0026quot;: loss.item()}\n\n    def save(self):\n        torch.save(\n            {\n                \u0026quot;epoch\u0026quot;: self.epoch+1+self.start_epoch,\n                \u0026quot;enc\u0026quot;: self.enc.state_dict(),\n                \u0026quot;opt\u0026quot;: self.opt.state_dict()\n            },\n            self.ckpt_name,\n        )\n        \n    def load(self, ckpt_path):\n        ckpt = torch.load(ckpt_path)\n        self.opt.load_state_dict(ckpt[\u0026#39;opt\u0026#39;])\n        self.enc.load_state_dict(ckpt[\u0026#39;enc\u0026#39;])\n        self.start_epoch = ckpt[\u0026#39;epoch\u0026#39;]\n\n    def on_epoch_end(self):\n        if not hasattr(self, \u0026#39;test_dl\u0026#39;):\n            print(\u0026#39;No test dataloader\u0026#39;)\n            return\n        \n        nshot = self.test_nshot\n        nquery = self.test_nquery\n        nway = self.test_nway\n        self.enc.eval()\n        acc = []\n        bs = []\n        for x in self.test_dl:\n            x = x.to(self.device)\n            with torch.no_grad():\n                embeddings = self.enc(x)\n\n            support = embeddings[:nshot*nway]\n            queries = embeddings[nshot*nway:]\n            prototypes = self.compute_prototypes(support, nway, nshot)\n\n            distances = self.pairwise_distances(queries, prototypes, \u0026#39;l2\u0026#39;)\n\n            log_p_y = (-distances).log_softmax(dim=1)\n\n            y_pred = (-distances).softmax(dim=1)\n            preds = torch.argmax(y_pred, dim=1)\n            \n            y = []\n            for c in range(nway):\n                y.extend([c]*nquery)\n            y = torch.tensor(y).to(self.device)\n            \n            batch_acc = (preds==y).cpu().float().mean().item()\n            acc.append(batch_acc)\n            bs.append(x.shape[0])\n\n        numerator = sum([size * _ for size,_ in zip(bs,acc)])\n        denominator = sum(bs)\n        acc = numerator / denominator\n        print(f\u0026#39;epoch {self.epoch+1}: few shot accuracy {acc:.4f}\u0026#39;)\n\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eDefine a regular CNN as encoder. Create instances of training and validation datasets.\u003cbr\u003eExperiment details (similar to the paper):  \u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003e1 support example per class, for both training and evaluation  \u003c/li\u003e\n\u003cli\u003e60 classes during training, 5 classes during evaluation.  \u003c/li\u003e\n\u003cli\u003e5 query inputs, for both training and evaluation.\u003c/li\u003e\n\u003c/ul\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003edef conv_block(in_channels, out_channels):\n    bn = nn.BatchNorm2d(out_channels)\n    nn.init.uniform_(bn.weight)\n    return nn.Sequential(\n        nn.Conv2d(in_channels, out_channels, 3, padding=1),\n        bn,\n        nn.ReLU(),\n        nn.MaxPool2d(2)\n    )\n\n\nclass Convnet(nn.Module):\n\n    def __init__(self, x_dim=1, hid_dim=64, z_dim=64):\n        super().__init__()\n        self.encoder = nn.Sequential(\n            conv_block(x_dim, hid_dim),\n            conv_block(hid_dim, hid_dim),\n            conv_block(hid_dim, hid_dim),\n            conv_block(hid_dim, hid_dim),\n            conv_block(hid_dim, hid_dim),\n            conv_block(hid_dim, z_dim),\n        )\n        self.fc1 = nn.Linear(64,64)\n        self.fc2 = nn.Linear(64,32)\n        self.relu = nn.ReLU()\n\n    def forward(self, x):\n        x = self.encoder(x)\n        x = x.view(x.size(0), -1)\n        x = self.fc2(self.relu(self.fc1(x)))\n        return x\n        \n\nenc = Convnet()\nnshot = 1\nnway = 60\ntest_nway = 5\nnquery = 5\nmodel = ProtoNet(enc, nshot=nshot, nway=nway, nquery=nquery, lr=0.001)\nproto_loader = ProtoData(\n    ds, \n    nshot=nshot, \n    nquery=nquery, \n    nway=nway, \n    labels=[i for i in range(900)], # labels 0-899 for training\n    num_batches=100\n)\nmodel.test_dl = ProtoData(\n    ds, \n    nshot=nshot, \n    nquery=nquery, \n    nway=test_nway, \n    labels=[(901 + i) for i in range(50)], # labels 901-950 for testing\n    num_batches=100\n)\nmodel.test_nshot = nshot\nmodel.test_nway = test_nway\nmodel.test_nquery = nquery\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eTrain\u003c/h2\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003emodel.fit(proto_loader, n_epochs=10)\n\u003c/code\u003e\u003c/pre\u003e\n\u003cpre\u003e\u003ccode class=\"language-text\"\u003eEpoch 1/10\n100/100 [==============================] - 35s 347ms/step - loss: 1.8391\nepoch 1: few shot accuracy 0.8932\nEpoch 2/10\n100/100 [==============================] - 35s 348ms/step - loss: 0.7875\nepoch 2: few shot accuracy 0.9136\nEpoch 3/10\n100/100 [==============================] - 35s 345ms/step - loss: 0.5544\nepoch 3: few shot accuracy 0.9444\nEpoch 4/10\n100/100 [==============================] - 34s 345ms/step - loss: 0.4112\nepoch 4: few shot accuracy 0.9524\nEpoch 5/10\n100/100 [==============================] - 34s 343ms/step - loss: 0.3292\nepoch 5: few shot accuracy 0.9656\nEpoch 6/10\n100/100 [==============================] - 34s 344ms/step - loss: 0.2968\nepoch 6: few shot accuracy 0.9608\nEpoch 7/10\n100/100 [==============================] - 35s 345ms/step - loss: 0.2524\nepoch 7: few shot accuracy 0.9688\nEpoch 8/10\n100/100 [==============================] - 34s 345ms/step - loss: 0.2242\nepoch 8: few shot accuracy 0.9648\nEpoch 9/10\n100/100 [==============================] - 34s 343ms/step - loss: 0.1958\nepoch 9: few shot accuracy 0.9672\nEpoch 10/10\n100/100 [==============================] - 34s 343ms/step - loss: 0.2011\nepoch 10: few shot accuracy 0.9664\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eNotes\u003c/h2\u003e\n\u003col\u003e\n\u003cli\u003eThe omniglot dataset provided by torchvision and the one used by the authors of the original paper seem to be slightly different.\nThe above code still performs well in 1 shot setup shown above and in my other experiments.\u003c/li\u003e\n\u003cli\u003eIf we expect the model to perform classification between\n10 classes based on 2 examples/class, it is best to keep \u003ccode\u003enshot = 2\u003c/code\u003e and \u003ccode\u003enway \u0026gt;= 10\u003c/code\u003e during training.\u003c/li\u003e\n\u003cli\u003eThe distance metric between a prototype and a query representation can also be calculated using cosine distance, but \nthe authors point out that euclidian distance works better.\u003c/li\u003e\n\u003c/ol\u003e\n"])</script><script>self.__next_f.push([1,"c:[[\"$\",\"div\",null,{\"className\":\"mb-7 font-light\",\"children\":[\"↖ \",[\"$\",\"a\",null,{\"rel\":\"\",\"target\":\"\",\"className\":\" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400\",\"href\":\"/blog\",\"children\":\"Back\"}]]}],[\"$\",\"article\",null,{\"className\":\"__className_bfc3c1 leading-7 antialiased\",\"children\":[[\"$\",\"h1\",null,{\"children\":\"Few shot classification with Prototypical Networks\"}],[\"$\",\"p\",null,{\"className\":\"text-neutral-500\",\"children\":\"14 December 2020\"}],[\"$\",\"div\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"$d\"}}]]}]]\n"])</script></body></html>

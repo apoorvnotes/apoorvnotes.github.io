@@ -1,0 +1,113 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="preload" as="font" href="/_next/static/media/2aaf0723e720e8b9-s.p.woff2" crossorigin="" type="font/woff2"/><link rel="preload" as="font" href="/_next/static/media/b89f66ecdb077e7f-s.p.woff2" crossorigin="" type="font/woff2"/><link rel="stylesheet" href="/_next/static/css/494afaf338ab5c7d.css" data-precedence="next"/><link rel="stylesheet" href="/_next/static/css/7c9a1029ba1c2cf7.css" data-precedence="next"/><link rel="preload" href="/_next/static/chunks/webpack-9747723084e35360.js" as="script" fetchPriority="low"/><script src="/_next/static/chunks/fd9d1056-a99b58d3cc150217.js" async=""></script><script src="/_next/static/chunks/596-ff6b9f15ce906e24.js" async=""></script><script src="/_next/static/chunks/main-app-4f41eba75df82bd8.js" async=""></script><title>Training Transformers on TPU</title><meta name="description" content="Training transformers is now super easy thanks to HuggingFace and Tensorflow 2"/><meta name="next-size-adjust"/><script src="/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js" noModule=""></script></head><body class="bg-[#1a1a1a] text-neutral-200 __className_20951f"><main class="flex min-h-screen flex-col items-center py-16 md:py-32 px-6"><div class="max-w-lg w-full flex flex-col"><div class="mb-7 font-light">↖ <a rel="" target="" class=" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400" href="/blog">Back</a></div><article class="__className_bfc3c1 leading-7 antialiased"><h1>Training Transformers on TPU</h1><p class="text-neutral-500">19 April 2020</p><div><p>This post shows how clean and straightforward it is to use huggingface library and tensorflow 2 to train transformer models on GPU and TPU!</p>
+<p>As of today (April, 2020),
+this is how you fine tune a BERT model on GPU (Same code works for CPU as well).</p>
+<pre><code class="language-python"># load data
+#
+# df = load_data()
+# -----------------------
+# text            , label
+# -----------------------
+# good job.           1
+# oh no!              0
+# .....
+
+# tokenize text
+text_col = df.text.astype(str)
+input_ids = []
+for i in range(0, len(text_col), config.chunk_size):
+    text_chunk = text_col[i:i+config.chunk_size].tolist()
+    encoded = tokenizer.encode_batch(text_chunk)
+    input_ids.extend([enc.ids for enc in encoded])
+
+x_train = np.array(input_ids)
+y_train = df.label.values
+
+# create data loader
+train_dataset = (
+    tf.data.Dataset
+    .from_tensor_slices((x_train, y_train))
+    .repeat()
+    .shuffle(2048)
+    .batch(config.batch_size)
+    .prefetch(tf.data.experimental.AUTOTUNE)
+)
+
+# create model : Input &gt; BERT &gt; Dense
+bert = TFBertModel.from_pretrained(config.MODEL_PATH, config=BertConfig())
+input_ids = layers.Input(shape=(config.maxlen,), dtype=tf.int32)
+sequence_output = bert(input_ids)[0][:, 0, :]
+out = layers.Dense(1, activation=&#39;sigmoid&#39;)(sequence_output)
+classifier = models.Model(inputs=input_ids, outputs=out)
+
+# compile
+classifier.compile(optimizers.Adam(lr=3e-5), 
+                   loss=&#39;binary_crossentropy&#39;, 
+                   metrics=[metrics.AUC()])
+
+# train !
+train_history = classifier.fit(
+    train_dataset,
+    steps_per_epoch=150,
+    epochs=30
+)
+</code></pre>
+<p>And this is how you do the same thing on TPUs. (Few extra lines added to load the model on TPU)</p>
+<pre><code class="language-python"># load data
+#
+# df = load_data()
+# -----------------------
+# text            , label
+# -----------------------
+# good job.           1
+# oh no!              0
+# .....
+
+# create distribution strategy
+tpu = tf.distribute.cluster_resolver.TPUClusterResolver()
+tf.config.experimental_connect_to_cluster(tpu)
+tf.tpu.experimental.initialize_tpu_system(tpu)
+strategy = tf.distribute.experimental.TPUStrategy(tpu)
+
+# create model : Input &gt; BERT &gt; Dense
+with strategy.scope():
+    bert = TFBertModel.from_pretrained(config.MODEL_PATH, config=BertConfig())
+    input_ids = layers.Input(shape=(config.maxlen,), dtype=tf.int32)
+    sequence_output = bert(input_ids)[0][:, 0, :]
+    out = layers.Dense(1, activation=&#39;sigmoid&#39;)(sequence_output)
+    classifier = models.Model(inputs=input_ids, outputs=out)
+    
+    classifier.compile(optimizers.Adam(lr=3e-5), 
+                   loss=&#39;binary_crossentropy&#39;, 
+                   metrics=[metrics.AUC()])
+    
+# tokenize text
+text_col = df.text.astype(str)
+input_ids = []
+for i in tqdm(range(0, len(text_col), config.chunk_size)):
+    text_chunk = text_col[i:i+config.chunk_size].tolist()
+    encoded = tokenizer.encode_batch(text_chunk)
+    input_ids.extend([enc.ids for enc in encoded])
+
+x_train = np.array(input_ids)
+y_train = df.label.values
+
+# create data loader
+train_dataset = (
+    tf.data.Dataset
+    .from_tensor_slices((x_train, y_train))
+    .repeat()
+    .shuffle(2048)
+    .batch(config.batch_size)
+    .prefetch(tf.data.experimental.AUTOTUNE)
+)
+
+# train !
+train_history = classifier.fit(
+    train_dataset,
+    steps_per_epoch=150,
+    epochs=30
+)
+</code></pre>
+<p>Its honestly amazing how easy this is compared to the old tensorflow 1.1x flow in the original code base of BERT paper!</p>
+<p>This abstraction and creation of clean APIs for latest deep learning techniques and models will continue to lower the barrier for using them in applications.</p>
+</div></article></div></main><script src="/_next/static/chunks/webpack-9747723084e35360.js" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push([1,"1:HL[\"/_next/static/media/2aaf0723e720e8b9-s.p.woff2\",{\"as\":\"font\",\"type\":\"font/woff2\"}]\n2:HL[\"/_next/static/css/494afaf338ab5c7d.css\",{\"as\":\"style\"}]\n0:\"$L3\"\n"])</script><script>self.__next_f.push([1,"4:HL[\"/_next/static/media/b89f66ecdb077e7f-s.p.woff2\",{\"as\":\"font\",\"type\":\"font/woff2\"}]\n5:HL[\"/_next/static/css/7c9a1029ba1c2cf7.css\",{\"as\":\"style\"}]\n"])</script><script>self.__next_f.push([1,"6:I{\"id\":7948,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\n8:I{\"id\":6628,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"\",\"async\":false}\n9:I{\"id\":7767,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"5"])</script><script>self.__next_f.push([1,"96:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\na:I{\"id\":7920,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\n"])</script><script>self.__next_f.push([1,"3:[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/494afaf338ab5c7d.css\",\"precedence\":\"next\"}]],[\"$\",\"$L6\",null,{\"buildId\":\"KnsO8z-ENGbRNQP4VRChH\",\"assetPrefix\":\"\",\"initialCanonicalUrl\":\"/blog/training-transformers-on-tpu/\",\"initialTree\":[\"\",{\"children\":[\"blog\",{\"children\":[[\"slug\",\"training-transformers-on-tpu\",\"d\"],{\"children\":[\"__PAGE__?{\\\"slug\\\":\\\"training-transformers-on-tpu\\\"}\",{}]}]}]},\"$undefined\",\"$undefined\",true],\"initialHead\":[false,\"$L7\"],\"globalErrorComponent\":\"$8\",\"children\":[null,[\"$\",\"html\",null,{\"lang\":\"en\",\"children\":[\"$\",\"body\",null,{\"className\":\"bg-[#1a1a1a] text-neutral-200 __className_20951f\",\"children\":[\"$\",\"main\",null,{\"className\":\"flex min-h-screen flex-col items-center py-16 md:py-32 px-6\",\"children\":[\"$\",\"div\",null,{\"className\":\"max-w-lg w-full flex flex-col\",\"children\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":\"404\"}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],\"notFoundStyles\":[],\"childProp\":{\"current\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"blog\",\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"childProp\":{\"current\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"blog\",\"children\",[\"slug\",\"training-transformers-on-tpu\",\"d\"],\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"childProp\":{\"current\":[\"$Lb\",\"$Lc\",null],\"segment\":\"__PAGE__?{\\\"slug\\\":\\\"training-transformers-on-tpu\\\"}\"},\"styles\":[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/7c9a1029ba1c2cf7.css\",\"precedence\":\"next\"}]]}],\"segment\":[\"slug\",\"training-transformers-on-tpu\",\"d\"]},\"styles\":[]}],\"segment\":\"blog\"},\"styles\":[]}]}]}]}]}],null]}]]\n"])</script><script>self.__next_f.push([1,"7:[[\"$\",\"meta\",\"0\",{\"charSet\":\"utf-8\"}],[\"$\",\"title\",\"1\",{\"children\":\"Training Transformers on TPU\"}],[\"$\",\"meta\",\"2\",{\"name\":\"description\",\"content\":\"Training transformers is now super easy thanks to HuggingFace and Tensorflow 2\"}],[\"$\",\"meta\",\"3\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}],[\"$\",\"meta\",\"4\",{\"name\":\"next-size-adjust\"}]]\nb:null\nd:Te77,"])</script><script>self.__next_f.push([1,"\u003cp\u003eThis post shows how clean and straightforward it is to use huggingface library and tensorflow 2 to train transformer models on GPU and TPU!\u003c/p\u003e\n\u003cp\u003eAs of today (April, 2020),\nthis is how you fine tune a BERT model on GPU (Same code works for CPU as well).\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003e# load data\n#\n# df = load_data()\n# -----------------------\n# text            , label\n# -----------------------\n# good job.           1\n# oh no!              0\n# .....\n\n# tokenize text\ntext_col = df.text.astype(str)\ninput_ids = []\nfor i in range(0, len(text_col), config.chunk_size):\n    text_chunk = text_col[i:i+config.chunk_size].tolist()\n    encoded = tokenizer.encode_batch(text_chunk)\n    input_ids.extend([enc.ids for enc in encoded])\n\nx_train = np.array(input_ids)\ny_train = df.label.values\n\n# create data loader\ntrain_dataset = (\n    tf.data.Dataset\n    .from_tensor_slices((x_train, y_train))\n    .repeat()\n    .shuffle(2048)\n    .batch(config.batch_size)\n    .prefetch(tf.data.experimental.AUTOTUNE)\n)\n\n# create model : Input \u0026gt; BERT \u0026gt; Dense\nbert = TFBertModel.from_pretrained(config.MODEL_PATH, config=BertConfig())\ninput_ids = layers.Input(shape=(config.maxlen,), dtype=tf.int32)\nsequence_output = bert(input_ids)[0][:, 0, :]\nout = layers.Dense(1, activation=\u0026#39;sigmoid\u0026#39;)(sequence_output)\nclassifier = models.Model(inputs=input_ids, outputs=out)\n\n# compile\nclassifier.compile(optimizers.Adam(lr=3e-5), \n                   loss=\u0026#39;binary_crossentropy\u0026#39;, \n                   metrics=[metrics.AUC()])\n\n# train !\ntrain_history = classifier.fit(\n    train_dataset,\n    steps_per_epoch=150,\n    epochs=30\n)\n\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eAnd this is how you do the same thing on TPUs. (Few extra lines added to load the model on TPU)\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003e# load data\n#\n# df = load_data()\n# -----------------------\n# text            , label\n# -----------------------\n# good job.           1\n# oh no!              0\n# .....\n\n# create distribution strategy\ntpu = tf.distribute.cluster_resolver.TPUClusterResolver()\ntf.config.experimental_connect_to_cluster(tpu)\ntf.tpu.experimental.initialize_tpu_system(tpu)\nstrategy = tf.distribute.experimental.TPUStrategy(tpu)\n\n# create model : Input \u0026gt; BERT \u0026gt; Dense\nwith strategy.scope():\n    bert = TFBertModel.from_pretrained(config.MODEL_PATH, config=BertConfig())\n    input_ids = layers.Input(shape=(config.maxlen,), dtype=tf.int32)\n    sequence_output = bert(input_ids)[0][:, 0, :]\n    out = layers.Dense(1, activation=\u0026#39;sigmoid\u0026#39;)(sequence_output)\n    classifier = models.Model(inputs=input_ids, outputs=out)\n    \n    classifier.compile(optimizers.Adam(lr=3e-5), \n                   loss=\u0026#39;binary_crossentropy\u0026#39;, \n                   metrics=[metrics.AUC()])\n    \n# tokenize text\ntext_col = df.text.astype(str)\ninput_ids = []\nfor i in tqdm(range(0, len(text_col), config.chunk_size)):\n    text_chunk = text_col[i:i+config.chunk_size].tolist()\n    encoded = tokenizer.encode_batch(text_chunk)\n    input_ids.extend([enc.ids for enc in encoded])\n\nx_train = np.array(input_ids)\ny_train = df.label.values\n\n# create data loader\ntrain_dataset = (\n    tf.data.Dataset\n    .from_tensor_slices((x_train, y_train))\n    .repeat()\n    .shuffle(2048)\n    .batch(config.batch_size)\n    .prefetch(tf.data.experimental.AUTOTUNE)\n)\n\n# train !\ntrain_history = classifier.fit(\n    train_dataset,\n    steps_per_epoch=150,\n    epochs=30\n)\n\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eIts honestly amazing how easy this is compared to the old tensorflow 1.1x flow in the original code base of BERT paper!\u003c/p\u003e\n\u003cp\u003eThis abstraction and creation of clean APIs for latest deep learning techniques and models will continue to lower the barrier for using them in applications.\u003c/p\u003e\n"])</script><script>self.__next_f.push([1,"c:[[\"$\",\"div\",null,{\"className\":\"mb-7 font-light\",\"children\":[\"↖ \",[\"$\",\"a\",null,{\"rel\":\"\",\"target\":\"\",\"className\":\" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400\",\"href\":\"/blog\",\"children\":\"Back\"}]]}],[\"$\",\"article\",null,{\"className\":\"__className_bfc3c1 leading-7 antialiased\",\"children\":[[\"$\",\"h1\",null,{\"children\":\"Training Transformers on TPU\"}],[\"$\",\"p\",null,{\"className\":\"text-neutral-500\",\"children\":\"19 April 2020\"}],[\"$\",\"div\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"$d\"}}]]}]]\n"])</script></body></html>

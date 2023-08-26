@@ -1,0 +1,253 @@
+<!DOCTYPE html><html lang="en"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="preload" as="font" href="/_next/static/media/2aaf0723e720e8b9-s.p.woff2" crossorigin="" type="font/woff2"/><link rel="preload" as="font" href="/_next/static/media/b89f66ecdb077e7f-s.p.woff2" crossorigin="" type="font/woff2"/><link rel="stylesheet" href="/_next/static/css/494afaf338ab5c7d.css" data-precedence="next"/><link rel="stylesheet" href="/_next/static/css/7c9a1029ba1c2cf7.css" data-precedence="next"/><link rel="preload" href="/_next/static/chunks/webpack-9747723084e35360.js" as="script" fetchPriority="low"/><script src="/_next/static/chunks/fd9d1056-a99b58d3cc150217.js" async=""></script><script src="/_next/static/chunks/596-ff6b9f15ce906e24.js" async=""></script><script src="/_next/static/chunks/main-app-4f41eba75df82bd8.js" async=""></script><title>Convolutional Encoder Decoder Setup for Speech Recognition</title><meta name="description" content="Using causal dilated convolutions and attention to train ASR"/><meta name="next-size-adjust"/><script src="/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js" noModule=""></script></head><body class="bg-[#1a1a1a] text-neutral-200 __className_20951f"><main class="flex min-h-screen flex-col items-center py-16 md:py-32 px-6"><div class="max-w-lg w-full flex flex-col"><div class="mb-7 font-light">↖ <a rel="" target="" class=" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400" href="/blog">Back</a></div><article class="__className_bfc3c1 leading-7 antialiased"><h1>Convolutional Encoder Decoder Setup for Speech Recognition</h1><p class="text-neutral-500">24 August 2020</p><div><h2>In this post</h2>
+<ul>
+<li>Implementing encoder and decoder with causal dilated convolutions. They are a fast alternative to sequential models like RNNs or Transformers.</li>
+<li>Clean implementation of encoder decoder (with attention) architecture with <em>just</em> TF2 / Keras&#39; functional API (no custom layers).</li>
+</ul>
+<h2>Causal Convolutions</h2>
+<p><a href="https://theblog.github.io/post/convolution-in-autoregressive-neural-networks/">This</a> blog by Kilian Batzner provides excellent explaination
+and illustrations on this topic.</p>
+<p>Here&#39;s the main thing to keep in mind.<br>
+<img src="/assets/causal.png" style="width:100%;">
+Unlike unidirectional RNNs or Transformer blocks with causal masks, the output at timestep <em>t</em> does not depend on input at every timetsep &lt; t.
+There is a receptive field associated with these convolutional layers. Which means, if the recpetive field is 6, output at <em>t</em> only depends on input at 
+<em>(t-0, ...t-5)</em>. Thankfully, the receptive field can be increased easily without dramatically increasing the number of parameters by uisng dilated convolutions.<br>
+For example; If Layer 1,2,3,4... have dilations of 1,2,4,8,... and so on.<br></p>
+<ul>
+<li>The receptive field with just one layer is 3. (Just the kernel size)</li>
+<li>The receptive field with 2 layers is 7.</li>
+<li>The receptive field with 10 layers is 1031.</li>
+</ul>
+<p>However, the number of parameters scales linearly with the number of layers. This results in fast processing over long sequences. Okay, lets get to implementation.</p>
+<h2>Encoder</h2>
+<p>The number of layers depends on the receptive field needed to process the input sequence effectively. If each timestep is a word, maybe a receptive field of 20 is enough for a lot of tasks. If each timestep is a character, the recpetive field needs to be bigger. With speech data, huge receptive fields are needed. (eg. 16000 waveform samples in one second of audio)</p>
+<p>The code below, shows 5 layers with dilations = 1,2,4,8,16.</p>
+<pre><code class="language-python">def encode_inputs(encoder_inputs):
+    x_encoder = Convolution1D(256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;)(
+        encoder_inputs
+    )
+    x_encoder = Dropout(0.1)(x_encoder)
+    x_encoder = Convolution1D(
+        256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;, dilation_rate=2
+    )(x_encoder)
+    x_encoder = Dropout(0.1)(x_encoder)
+    x_encoder = Convolution1D(
+        256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;, dilation_rate=4
+    )(x_encoder)
+    x_encoder = Dropout(0.1)(x_encoder)
+    x_encoder = Convolution1D(
+        256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;, dilation_rate=8
+    )(x_encoder)
+    x_encoder = Dropout(0.1)(x_encoder)
+    x_encoder = Convolution1D(
+        256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;, dilation_rate=16
+    )(x_encoder)
+    return x_encoder
+</code></pre>
+<h2>Decoder</h2>
+<p>Two parts in decoder:<br>
+A. one that processes past ouputs or targets and returns the hidden state of the decoder till previous timestep<br>
+B. one that processes attented encoder outputs and returns prediction at current timestep</p>
+<pre><code class="language-python">def process_past_targets(decoder_inputs):
+    x_decoder = Convolution1D(256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;)(
+        decoder_inputs
+    )
+    x_decoder = Dropout(0.1)(x_decoder)
+    x_decoder = Convolution1D(
+        256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;, dilation_rate=2
+    )(x_decoder)
+    x_decoder = Dropout(0.1)(x_decoder)
+    x_decoder = Convolution1D(
+        256, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;, dilation_rate=4
+    )(x_decoder)
+    return x_decoder
+
+def decode_attended_input(decoder_combined_context):
+    decoder_outputs = Convolution1D(64, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;)(
+        decoder_combined_context
+    )
+    decoder_outputs = Dropout(0.1)(decoder_outputs)
+    decoder_outputs = Convolution1D(64, kernel_size=3, activation=&quot;relu&quot;, padding=&quot;causal&quot;)(
+        decoder_outputs
+    )
+    # Output
+    decoder_dense = Dense(num_unique_chars, activation=&quot;softmax&quot;)
+    decoder_outputs = decoder_dense(decoder_outputs)
+    return decoder_outputs
+</code></pre>
+<h2>Dot Product Attention</h2>
+<ol>
+<li>Multiply the output from part A of decoder (above) with the output of encoder at each timestep.</li>
+<li>Apply softmax to the sequence of products to get attention weights (between 0 and 1) for each encoder output.</li>
+</ol>
+<pre><code class="language-python">def attend(x_decoder, x_encoder):
+    attention = Dot(axes=(2, 2))([x_decoder, x_encoder])
+    attention = Activation(&quot;softmax&quot;)(attention)
+
+    context = Dot(axes=(2, 1))([attention, x_encoder])
+    decoder_combined_context = Concatenate(axis=-1)([context, x_decoder])
+    return decoder_combined_context
+</code></pre>
+<h2>Complete model</h2>
+<pre><code class="language-python">def create_model():
+    encoder_inputs = Input(shape=(None, 80), name=&quot;enc_inp&quot;)
+    decoder_inputs = Input(shape=(None, num_unique_chars), name=&quot;dec_inp&quot;)
+    
+    x_encoder = encode_inputs(encoder_inputs)  # encode entire input sequence
+    x_decoder = process_past_targets(decoder_inputs)
+    decoder_combined_context = attend(x_decoder, x_encoder)  # weighted encoder outputs 
+                               # as per processed target tokens from previous timesteps
+    decoder_outputs = decode_attended_input(decoder_combined_context)  # predict targets
+                                # at next timesteps
+    
+    model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+    model.compile(optimizer=&quot;adam&quot;, loss=&quot;categorical_crossentropy&quot;)
+    return model
+</code></pre>
+<h2>Preprocess speech data</h2>
+<p>Speech data sets are usually large, and don&#39;t fit in memory. So, I&#39;ve got two options:<br></p>
+<ol>
+<li>Preprocess on the fly.<br>
+  Pros: Easy to switch hyperparams. No setup time. No extra disk space needed.<br>
+  Cons: <strong>Slow!</strong> GPU won&#39;t be in use for a large chunk of training time while the CPU prepares the next batch.</li>
+<li>Store processed data on disk.<br>
+  Pros: Fast! Especially if you use TF Records.<br>
+  Cons: Can require a lot of setup time and disk space. (About an hour and a half to convert 100 hours of speech to Mel filter banks and save them)<br>
+  This, however, is the only option if my data doesn&#39;t fit in memory and/or I need to completely ustilise TPUs. The only difference with TPUs
+  being that I need to store TF records on a GCP bucket and not my machine. I&#39;ll write a separate post about the details later and link it here.</li>
+</ol>
+<p>For now, some code to do it on the fly with the with a python generator.</p>
+<pre><code class="language-python">import soundfile as sf
+from python_speech_features import logfbank
+
+def pad_waveform(data, maxlen):
+    padded = np.zeros((maxlen), dtype=&#39;float32&#39;)
+    length = len(data)
+    padded[:length] = data
+    return padded
+
+def get_feats(audio_file, max_sample_len):
+    &quot;&quot;&quot; returns feats with shape (seq_len, 128) &quot;&quot;&quot;
+    data, samplerate = sf.read(audio_file)
+    data = pad_waveform(data, max_sample_len)
+    assert samplerate == 16000
+    feats = logfbank(data, nfilt=128)
+    return feats
+
+def generator():
+    while True:
+        for i, (audio_file, target_text) in enumerate(zip(files, texts)):
+            encoder_inputs = get_feats(audio_file, max_sample_len)
+            decoder_inputs = np.zeros((max_target_len, num_unique_chars), dtype=&#39;float32&#39;)
+            decoder_targets = np.zeros((max_target_len, num_unique_chars), dtype=&#39;float32&#39;)
+            for t, char in enumerate(target_text):
+                decoder_inputs[t, char_index[char]] = 1.0
+                if t &gt; 0:
+                    decoder_targets[t - 1, char_index[char]] = 1.0   
+            yield {
+                &quot;enc_inp&quot;: encoder_inputs, &quot;dec_inp&quot;: decoder_inputs
+            }, decoder_targets
+</code></pre>
+<p>Then, create a tf.data.Dataset from generator.<br></p>
+<pre><code class="language-python">dataset = tf.data.Dataset.from_generator(
+    generator, 
+    output_types=({&quot;enc_inp&quot;: tf.float32, &quot;dec_inp&quot;: tf.float32}, tf.float32)
+)
+</code></pre>
+<h2>Training for speech recognition</h2>
+<pre><code class="language-python">batch_size = 64
+
+my_callbacks = [
+    tf.keras.callbacks.EarlyStopping(patience=3),
+    tf.keras.callbacks.ModelCheckpoint(
+        filepath=&#39;bigmodel.{epoch:02d}-{val_loss:.2f}.h5&#39;, 
+        save_best_only=True,
+        restore_best_weights=True
+    )
+]
+
+train_dataset = (
+    train_dataset
+    .repeat()
+    .batch(batch_size)
+    .prefetch(tf.data.experimental.AUTOTUNE)
+)
+
+test_dataset = (
+    test_dataset
+    .repeat()
+    .batch(batch_size)
+    .prefetch(tf.data.experimental.AUTOTUNE)
+)
+
+steps_per_epoch = len(train_files) // batch_size
+validation_steps = len(test_files) // batch_size
+
+history = model.fit(
+    train_dataset,
+    validation_data=test_dataset,
+    validation_steps=validation_steps,
+    epochs=20,
+    steps_per_epoch=steps_per_epoch,
+    callbacks=my_callbacks
+)
+
+&quot;&quot;&quot;
+## Plot loss values
+&quot;&quot;&quot;
+plt.plot(history.history[&quot;loss&quot;])
+plt.plot(history.history[&quot;val_loss&quot;])
+plt.title(&quot;model loss&quot;)
+plt.ylabel(&quot;loss&quot;)
+plt.xlabel(&quot;epoch&quot;)
+plt.legend([&quot;train&quot;, &quot;val&quot;], loc=&quot;upper left&quot;)
+plt.show()
+</code></pre>
+<h2>Inference from checkpoint</h2>
+<pre><code class="language-python">model = tf.keras.models.load_model(&#39;bigmodel.16-0.03.h5&#39;)
+
+def create_inference_dataset(files):
+    enc_inp = []
+    dec_inp = []
+    
+    for i, audio_file in enumerate(files):
+        encoder_inputs = get_feats(audio_file, max_sample_len)
+        decoder_inputs = np.zeros((max_target_len, num_unique_chars), dtype=&#39;float32&#39;)
+        decoder_inputs[0, char_index[&#39;\t&#39;]] = 1.0
+        enc_inp.append(encoder_inputs)
+        dec_inp.append(decoder_inputs)
+    return np.stack(enc_inp), np.stack(dec_inp)
+
+def show_predictions(model, files, targets=None):
+    in_encoder, in_decoder = create_inference_dataset(files)
+
+    predict = np.zeros((test_samples, max_target_len),dtype=&#39;float32&#39;)
+
+    for i in range(max_target_len - 1):
+        predict = model.predict([in_encoder, in_decoder])
+        predict = predict.argmax(axis=-1)
+        predict_ = predict[:, i].ravel().tolist()
+        for j, x in enumerate(predict_):
+            in_decoder[j, i + 1, x] = 1
+
+    reverse_char_index = dict((i, char) for char, i in char_index.items())
+
+    for seq_index in range(test_samples):
+        # Take one sequence (part of the training set)
+        # for trying out decoding.
+        output_seq = predict[seq_index, :].ravel().tolist()
+        decoded = []
+        for x in output_seq:
+            if reverse_char_index[x] == &quot;\n&quot;:
+                break
+            else:
+                decoded.append(reverse_char_index[x])
+        decoded_sentence = &quot;&quot;.join(decoded)
+        print(&#39;-&#39;)
+        print(&#39;Decoded sentence:&#39;, decoded_sentence)
+        if targets:
+            print(&#39;Target sentence:&#39;, targets[seq_index].strip())
+
+test_samples = 10
+show_predictions(model, test_files[:test_samples], test_texts)
+</code></pre>
+</div></article></div></main><script src="/_next/static/chunks/webpack-9747723084e35360.js" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0])</script><script>self.__next_f.push([1,"1:HL[\"/_next/static/media/2aaf0723e720e8b9-s.p.woff2\",{\"as\":\"font\",\"type\":\"font/woff2\"}]\n2:HL[\"/_next/static/css/494afaf338ab5c7d.css\",{\"as\":\"style\"}]\n0:\"$L3\"\n"])</script><script>self.__next_f.push([1,"4:HL[\"/_next/static/media/b89f66ecdb077e7f-s.p.woff2\",{\"as\":\"font\",\"type\":\"font/woff2\"}]\n5:HL[\"/_next/static/css/7c9a1029ba1c2cf7.css\",{\"as\":\"style\"}]\n"])</script><script>self.__next_f.push([1,"6:I{\"id\":7948,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\n8:I{\"id\":6628,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"\",\"async\":false}\n9:I{\"id\":7767,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"5"])</script><script>self.__next_f.push([1,"96:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\na:I{\"id\":7920,\"chunks\":[\"272:static/chunks/webpack-9747723084e35360.js\",\"971:static/chunks/fd9d1056-a99b58d3cc150217.js\",\"596:static/chunks/596-ff6b9f15ce906e24.js\"],\"name\":\"default\",\"async\":false}\n"])</script><script>self.__next_f.push([1,"3:[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/494afaf338ab5c7d.css\",\"precedence\":\"next\"}]],[\"$\",\"$L6\",null,{\"buildId\":\"KnsO8z-ENGbRNQP4VRChH\",\"assetPrefix\":\"\",\"initialCanonicalUrl\":\"/blog/encoder-decoder-asr/\",\"initialTree\":[\"\",{\"children\":[\"blog\",{\"children\":[[\"slug\",\"encoder-decoder-asr\",\"d\"],{\"children\":[\"__PAGE__?{\\\"slug\\\":\\\"encoder-decoder-asr\\\"}\",{}]}]}]},\"$undefined\",\"$undefined\",true],\"initialHead\":[false,\"$L7\"],\"globalErrorComponent\":\"$8\",\"children\":[null,[\"$\",\"html\",null,{\"lang\":\"en\",\"children\":[\"$\",\"body\",null,{\"className\":\"bg-[#1a1a1a] text-neutral-200 __className_20951f\",\"children\":[\"$\",\"main\",null,{\"className\":\"flex min-h-screen flex-col items-center py-16 md:py-32 px-6\",\"children\":[\"$\",\"div\",null,{\"className\":\"max-w-lg w-full flex flex-col\",\"children\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":\"404\"}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],\"notFoundStyles\":[],\"childProp\":{\"current\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"blog\",\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"childProp\":{\"current\":[\"$\",\"$L9\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"blog\",\"children\",[\"slug\",\"encoder-decoder-asr\",\"d\"],\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"template\":[\"$\",\"$La\",null,{}],\"templateStyles\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"childProp\":{\"current\":[\"$Lb\",\"$Lc\",null],\"segment\":\"__PAGE__?{\\\"slug\\\":\\\"encoder-decoder-asr\\\"}\"},\"styles\":[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/7c9a1029ba1c2cf7.css\",\"precedence\":\"next\"}]]}],\"segment\":[\"slug\",\"encoder-decoder-asr\",\"d\"]},\"styles\":[]}],\"segment\":\"blog\"},\"styles\":[]}]}]}]}]}],null]}]]\n"])</script><script>self.__next_f.push([1,"7:[[\"$\",\"meta\",\"0\",{\"charSet\":\"utf-8\"}],[\"$\",\"title\",\"1\",{\"children\":\"Convolutional Encoder Decoder Setup for Speech Recognition\"}],[\"$\",\"meta\",\"2\",{\"name\":\"description\",\"content\":\"Using causal dilated convolutions and attention to train ASR\"}],[\"$\",\"meta\",\"3\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1\"}],[\"$\",\"meta\",\"4\",{\"name\":\"next-size-adjust\"}]]\nb:null\nd:T2d99,"])</script><script>self.__next_f.push([1,"\u003ch2\u003eIn this post\u003c/h2\u003e\n\u003cul\u003e\n\u003cli\u003eImplementing encoder and decoder with causal dilated convolutions. They are a fast alternative to sequential models like RNNs or Transformers.\u003c/li\u003e\n\u003cli\u003eClean implementation of encoder decoder (with attention) architecture with \u003cem\u003ejust\u003c/em\u003e TF2 / Keras\u0026#39; functional API (no custom layers).\u003c/li\u003e\n\u003c/ul\u003e\n\u003ch2\u003eCausal Convolutions\u003c/h2\u003e\n\u003cp\u003e\u003ca href=\"https://theblog.github.io/post/convolution-in-autoregressive-neural-networks/\"\u003eThis\u003c/a\u003e blog by Kilian Batzner provides excellent explaination\nand illustrations on this topic.\u003c/p\u003e\n\u003cp\u003eHere\u0026#39;s the main thing to keep in mind.\u003cbr\u003e\n\u003cimg src=\"/assets/causal.png\" style=\"width:100%;\"\u003e\nUnlike unidirectional RNNs or Transformer blocks with causal masks, the output at timestep \u003cem\u003et\u003c/em\u003e does not depend on input at every timetsep \u0026lt; t.\nThere is a receptive field associated with these convolutional layers. Which means, if the recpetive field is 6, output at \u003cem\u003et\u003c/em\u003e only depends on input at \n\u003cem\u003e(t-0, ...t-5)\u003c/em\u003e. Thankfully, the receptive field can be increased easily without dramatically increasing the number of parameters by uisng dilated convolutions.\u003cbr\u003e\nFor example; If Layer 1,2,3,4... have dilations of 1,2,4,8,... and so on.\u003cbr\u003e\u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003eThe receptive field with just one layer is 3. (Just the kernel size)\u003c/li\u003e\n\u003cli\u003eThe receptive field with 2 layers is 7.\u003c/li\u003e\n\u003cli\u003eThe receptive field with 10 layers is 1031.\u003c/li\u003e\n\u003c/ul\u003e\n\u003cp\u003eHowever, the number of parameters scales linearly with the number of layers. This results in fast processing over long sequences. Okay, lets get to implementation.\u003c/p\u003e\n\u003ch2\u003eEncoder\u003c/h2\u003e\n\u003cp\u003eThe number of layers depends on the receptive field needed to process the input sequence effectively. If each timestep is a word, maybe a receptive field of 20 is enough for a lot of tasks. If each timestep is a character, the recpetive field needs to be bigger. With speech data, huge receptive fields are needed. (eg. 16000 waveform samples in one second of audio)\u003c/p\u003e\n\u003cp\u003eThe code below, shows 5 layers with dilations = 1,2,4,8,16.\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003edef encode_inputs(encoder_inputs):\n    x_encoder = Convolution1D(256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;)(\n        encoder_inputs\n    )\n    x_encoder = Dropout(0.1)(x_encoder)\n    x_encoder = Convolution1D(\n        256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;, dilation_rate=2\n    )(x_encoder)\n    x_encoder = Dropout(0.1)(x_encoder)\n    x_encoder = Convolution1D(\n        256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;, dilation_rate=4\n    )(x_encoder)\n    x_encoder = Dropout(0.1)(x_encoder)\n    x_encoder = Convolution1D(\n        256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;, dilation_rate=8\n    )(x_encoder)\n    x_encoder = Dropout(0.1)(x_encoder)\n    x_encoder = Convolution1D(\n        256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;, dilation_rate=16\n    )(x_encoder)\n    return x_encoder\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eDecoder\u003c/h2\u003e\n\u003cp\u003eTwo parts in decoder:\u003cbr\u003e\nA. one that processes past ouputs or targets and returns the hidden state of the decoder till previous timestep\u003cbr\u003e\nB. one that processes attented encoder outputs and returns prediction at current timestep\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003edef process_past_targets(decoder_inputs):\n    x_decoder = Convolution1D(256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;)(\n        decoder_inputs\n    )\n    x_decoder = Dropout(0.1)(x_decoder)\n    x_decoder = Convolution1D(\n        256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;, dilation_rate=2\n    )(x_decoder)\n    x_decoder = Dropout(0.1)(x_decoder)\n    x_decoder = Convolution1D(\n        256, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;, dilation_rate=4\n    )(x_decoder)\n    return x_decoder\n\ndef decode_attended_input(decoder_combined_context):\n    decoder_outputs = Convolution1D(64, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;)(\n        decoder_combined_context\n    )\n    decoder_outputs = Dropout(0.1)(decoder_outputs)\n    decoder_outputs = Convolution1D(64, kernel_size=3, activation=\u0026quot;relu\u0026quot;, padding=\u0026quot;causal\u0026quot;)(\n        decoder_outputs\n    )\n    # Output\n    decoder_dense = Dense(num_unique_chars, activation=\u0026quot;softmax\u0026quot;)\n    decoder_outputs = decoder_dense(decoder_outputs)\n    return decoder_outputs\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eDot Product Attention\u003c/h2\u003e\n\u003col\u003e\n\u003cli\u003eMultiply the output from part A of decoder (above) with the output of encoder at each timestep.\u003c/li\u003e\n\u003cli\u003eApply softmax to the sequence of products to get attention weights (between 0 and 1) for each encoder output.\u003c/li\u003e\n\u003c/ol\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003edef attend(x_decoder, x_encoder):\n    attention = Dot(axes=(2, 2))([x_decoder, x_encoder])\n    attention = Activation(\u0026quot;softmax\u0026quot;)(attention)\n\n    context = Dot(axes=(2, 1))([attention, x_encoder])\n    decoder_combined_context = Concatenate(axis=-1)([context, x_decoder])\n    return decoder_combined_context\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eComplete model\u003c/h2\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003edef create_model():\n    encoder_inputs = Input(shape=(None, 80), name=\u0026quot;enc_inp\u0026quot;)\n    decoder_inputs = Input(shape=(None, num_unique_chars), name=\u0026quot;dec_inp\u0026quot;)\n    \n    x_encoder = encode_inputs(encoder_inputs)  # encode entire input sequence\n    x_decoder = process_past_targets(decoder_inputs)\n    decoder_combined_context = attend(x_decoder, x_encoder)  # weighted encoder outputs \n                               # as per processed target tokens from previous timesteps\n    decoder_outputs = decode_attended_input(decoder_combined_context)  # predict targets\n                                # at next timesteps\n    \n    model = Model([encoder_inputs, decoder_inputs], decoder_outputs)\n    model.compile(optimizer=\u0026quot;adam\u0026quot;, loss=\u0026quot;categorical_crossentropy\u0026quot;)\n    return model\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003ePreprocess speech data\u003c/h2\u003e\n\u003cp\u003eSpeech data sets are usually large, and don\u0026#39;t fit in memory. So, I\u0026#39;ve got two options:\u003cbr\u003e\u003c/p\u003e\n\u003col\u003e\n\u003cli\u003ePreprocess on the fly.\u003cbr\u003e\n  Pros: Easy to switch hyperparams. No setup time. No extra disk space needed.\u003cbr\u003e\n  Cons: \u003cstrong\u003eSlow!\u003c/strong\u003e GPU won\u0026#39;t be in use for a large chunk of training time while the CPU prepares the next batch.\u003c/li\u003e\n\u003cli\u003eStore processed data on disk.\u003cbr\u003e\n  Pros: Fast! Especially if you use TF Records.\u003cbr\u003e\n  Cons: Can require a lot of setup time and disk space. (About an hour and a half to convert 100 hours of speech to Mel filter banks and save them)\u003cbr\u003e\n  This, however, is the only option if my data doesn\u0026#39;t fit in memory and/or I need to completely ustilise TPUs. The only difference with TPUs\n  being that I need to store TF records on a GCP bucket and not my machine. I\u0026#39;ll write a separate post about the details later and link it here.\u003c/li\u003e\n\u003c/ol\u003e\n\u003cp\u003eFor now, some code to do it on the fly with the with a python generator.\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003eimport soundfile as sf\nfrom python_speech_features import logfbank\n\ndef pad_waveform(data, maxlen):\n    padded = np.zeros((maxlen), dtype=\u0026#39;float32\u0026#39;)\n    length = len(data)\n    padded[:length] = data\n    return padded\n\ndef get_feats(audio_file, max_sample_len):\n    \u0026quot;\u0026quot;\u0026quot; returns feats with shape (seq_len, 128) \u0026quot;\u0026quot;\u0026quot;\n    data, samplerate = sf.read(audio_file)\n    data = pad_waveform(data, max_sample_len)\n    assert samplerate == 16000\n    feats = logfbank(data, nfilt=128)\n    return feats\n\ndef generator():\n    while True:\n        for i, (audio_file, target_text) in enumerate(zip(files, texts)):\n            encoder_inputs = get_feats(audio_file, max_sample_len)\n            decoder_inputs = np.zeros((max_target_len, num_unique_chars), dtype=\u0026#39;float32\u0026#39;)\n            decoder_targets = np.zeros((max_target_len, num_unique_chars), dtype=\u0026#39;float32\u0026#39;)\n            for t, char in enumerate(target_text):\n                decoder_inputs[t, char_index[char]] = 1.0\n                if t \u0026gt; 0:\n                    decoder_targets[t - 1, char_index[char]] = 1.0   \n            yield {\n                \u0026quot;enc_inp\u0026quot;: encoder_inputs, \u0026quot;dec_inp\u0026quot;: decoder_inputs\n            }, decoder_targets\n\u003c/code\u003e\u003c/pre\u003e\n\u003cp\u003eThen, create a tf.data.Dataset from generator.\u003cbr\u003e\u003c/p\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003edataset = tf.data.Dataset.from_generator(\n    generator, \n    output_types=({\u0026quot;enc_inp\u0026quot;: tf.float32, \u0026quot;dec_inp\u0026quot;: tf.float32}, tf.float32)\n)\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eTraining for speech recognition\u003c/h2\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003ebatch_size = 64\n\nmy_callbacks = [\n    tf.keras.callbacks.EarlyStopping(patience=3),\n    tf.keras.callbacks.ModelCheckpoint(\n        filepath=\u0026#39;bigmodel.{epoch:02d}-{val_loss:.2f}.h5\u0026#39;, \n        save_best_only=True,\n        restore_best_weights=True\n    )\n]\n\ntrain_dataset = (\n    train_dataset\n    .repeat()\n    .batch(batch_size)\n    .prefetch(tf.data.experimental.AUTOTUNE)\n)\n\ntest_dataset = (\n    test_dataset\n    .repeat()\n    .batch(batch_size)\n    .prefetch(tf.data.experimental.AUTOTUNE)\n)\n\nsteps_per_epoch = len(train_files) // batch_size\nvalidation_steps = len(test_files) // batch_size\n\nhistory = model.fit(\n    train_dataset,\n    validation_data=test_dataset,\n    validation_steps=validation_steps,\n    epochs=20,\n    steps_per_epoch=steps_per_epoch,\n    callbacks=my_callbacks\n)\n\n\u0026quot;\u0026quot;\u0026quot;\n## Plot loss values\n\u0026quot;\u0026quot;\u0026quot;\nplt.plot(history.history[\u0026quot;loss\u0026quot;])\nplt.plot(history.history[\u0026quot;val_loss\u0026quot;])\nplt.title(\u0026quot;model loss\u0026quot;)\nplt.ylabel(\u0026quot;loss\u0026quot;)\nplt.xlabel(\u0026quot;epoch\u0026quot;)\nplt.legend([\u0026quot;train\u0026quot;, \u0026quot;val\u0026quot;], loc=\u0026quot;upper left\u0026quot;)\nplt.show()\n\u003c/code\u003e\u003c/pre\u003e\n\u003ch2\u003eInference from checkpoint\u003c/h2\u003e\n\u003cpre\u003e\u003ccode class=\"language-python\"\u003emodel = tf.keras.models.load_model(\u0026#39;bigmodel.16-0.03.h5\u0026#39;)\n\ndef create_inference_dataset(files):\n    enc_inp = []\n    dec_inp = []\n    \n    for i, audio_file in enumerate(files):\n        encoder_inputs = get_feats(audio_file, max_sample_len)\n        decoder_inputs = np.zeros((max_target_len, num_unique_chars), dtype=\u0026#39;float32\u0026#39;)\n        decoder_inputs[0, char_index[\u0026#39;\\t\u0026#39;]] = 1.0\n        enc_inp.append(encoder_inputs)\n        dec_inp.append(decoder_inputs)\n    return np.stack(enc_inp), np.stack(dec_inp)\n\ndef show_predictions(model, files, targets=None):\n    in_encoder, in_decoder = create_inference_dataset(files)\n\n    predict = np.zeros((test_samples, max_target_len),dtype=\u0026#39;float32\u0026#39;)\n\n    for i in range(max_target_len - 1):\n        predict = model.predict([in_encoder, in_decoder])\n        predict = predict.argmax(axis=-1)\n        predict_ = predict[:, i].ravel().tolist()\n        for j, x in enumerate(predict_):\n            in_decoder[j, i + 1, x] = 1\n\n    reverse_char_index = dict((i, char) for char, i in char_index.items())\n\n    for seq_index in range(test_samples):\n        # Take one sequence (part of the training set)\n        # for trying out decoding.\n        output_seq = predict[seq_index, :].ravel().tolist()\n        decoded = []\n        for x in output_seq:\n            if reverse_char_index[x] == \u0026quot;\\n\u0026quot;:\n                break\n            else:\n                decoded.append(reverse_char_index[x])\n        decoded_sentence = \u0026quot;\u0026quot;.join(decoded)\n        print(\u0026#39;-\u0026#39;)\n        print(\u0026#39;Decoded sentence:\u0026#39;, decoded_sentence)\n        if targets:\n            print(\u0026#39;Target sentence:\u0026#39;, targets[seq_index].strip())\n\ntest_samples = 10\nshow_predictions(model, test_files[:test_samples], test_texts)\n\u003c/code\u003e\u003c/pre\u003e\n"])</script><script>self.__next_f.push([1,"c:[[\"$\",\"div\",null,{\"className\":\"mb-7 font-light\",\"children\":[\"↖ \",[\"$\",\"a\",null,{\"rel\":\"\",\"target\":\"\",\"className\":\" text-neutral-200 underline underline-offset-2 transition-all duration-200 decoration-neutral-600 hover:decoration-neutral-400\",\"href\":\"/blog\",\"children\":\"Back\"}]]}],[\"$\",\"article\",null,{\"className\":\"__className_bfc3c1 leading-7 antialiased\",\"children\":[[\"$\",\"h1\",null,{\"children\":\"Convolutional Encoder Decoder Setup for Speech Recognition\"}],[\"$\",\"p\",null,{\"className\":\"text-neutral-500\",\"children\":\"24 August 2020\"}],[\"$\",\"div\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"$d\"}}]]}]]\n"])</script></body></html>
