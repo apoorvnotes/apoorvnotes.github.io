@@ -12,6 +12,7 @@
   --font-weight-normal: 500;
   --font-weight-medium: 600;
   --font-weight-bold: 800;
+  --code-background-color: #ddd;
 
   font-family: var(--font-family);
   font-optical-sizing: auto;
@@ -27,6 +28,7 @@
     --text-color-alt: #aaa;
     --background-color: #000;
     --background-color-alt: #111;
+    --code-background-color: #222;
   }
 }
 
@@ -242,7 +244,7 @@ code {
 
 .codeblock {
   font-weight: 400;
-  background: #ddd;
+  background: var(--code-background-color);
   font-weight: var(--font-weight-medium);
 }
 
