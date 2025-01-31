@@ -1,0 +1,971 @@
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/><title>group relative policy optimization (GRPO)</title><style>
+/* cspell:disable-file */
+/* webkit printing magic: print all background colors */
+html {
+	-webkit-print-color-adjust: exact;
+}
+* {
+	box-sizing: border-box;
+	-webkit-print-color-adjust: exact;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+@media only screen {
+	body {
+		margin: 2em auto;
+		max-width: 900px;
+		color: rgb(55, 53, 47);
+	}
+}
+
+body {
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+a,
+a.visited {
+	color: inherit;
+	text-decoration: underline;
+}
+
+.pdf-relative-link-path {
+	font-size: 80%;
+	color: #444;
+}
+
+h1,
+h2,
+h3 {
+	letter-spacing: -0.01em;
+	line-height: 1.2;
+	font-weight: 600;
+	margin-bottom: 0;
+}
+
+.page-title {
+	font-size: 2.5rem;
+	font-weight: 700;
+	margin-top: 0;
+	margin-bottom: 0.75em;
+}
+
+h1 {
+	font-size: 1.875rem;
+	margin-top: 1.875rem;
+}
+
+h2 {
+	font-size: 1.5rem;
+	margin-top: 1.5rem;
+}
+
+h3 {
+	font-size: 1.25rem;
+	margin-top: 1.25rem;
+}
+
+.source {
+	border: 1px solid #ddd;
+	border-radius: 3px;
+	padding: 1.5em;
+	word-break: break-all;
+}
+
+.callout {
+	border-radius: 3px;
+	padding: 1rem;
+}
+
+figure {
+	margin: 1.25em 0;
+	page-break-inside: avoid;
+}
+
+figcaption {
+	opacity: 0.5;
+	font-size: 85%;
+	margin-top: 0.5em;
+}
+
+mark {
+	background-color: transparent;
+}
+
+.indented {
+	padding-left: 1.5em;
+}
+
+hr {
+	background: transparent;
+	display: block;
+	width: 100%;
+	height: 1px;
+	visibility: visible;
+	border: none;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.09);
+}
+
+img {
+	max-width: 100%;
+}
+
+@media only print {
+	img {
+		max-height: 100vh;
+		object-fit: contain;
+	}
+}
+
+@page {
+	margin: 1in;
+}
+
+.collection-content {
+	font-size: 0.875rem;
+}
+
+.column-list {
+	display: flex;
+	justify-content: space-between;
+}
+
+.column {
+	padding: 0 1em;
+}
+
+.column:first-child {
+	padding-left: 0;
+}
+
+.column:last-child {
+	padding-right: 0;
+}
+
+.table_of_contents-item {
+	display: block;
+	font-size: 0.875rem;
+	line-height: 1.3;
+	padding: 0.125rem;
+}
+
+.table_of_contents-indent-1 {
+	margin-left: 1.5rem;
+}
+
+.table_of_contents-indent-2 {
+	margin-left: 3rem;
+}
+
+.table_of_contents-indent-3 {
+	margin-left: 4.5rem;
+}
+
+.table_of_contents-link {
+	text-decoration: none;
+	opacity: 0.7;
+	border-bottom: 1px solid rgba(55, 53, 47, 0.18);
+}
+
+table,
+th,
+td {
+	border: 1px solid rgba(55, 53, 47, 0.09);
+	border-collapse: collapse;
+}
+
+table {
+	border-left: none;
+	border-right: none;
+}
+
+th,
+td {
+	font-weight: normal;
+	padding: 0.25em 0.5em;
+	line-height: 1.5;
+	min-height: 1.5em;
+	text-align: left;
+}
+
+th {
+	color: rgba(55, 53, 47, 0.6);
+}
+
+ol,
+ul {
+	margin: 0;
+	margin-block-start: 0.6em;
+	margin-block-end: 0.6em;
+}
+
+li > ol:first-child,
+li > ul:first-child {
+	margin-block-start: 0.6em;
+}
+
+ul > li {
+	list-style: disc;
+}
+
+ul.to-do-list {
+	padding-inline-start: 0;
+}
+
+ul.to-do-list > li {
+	list-style: none;
+}
+
+.to-do-children-checked {
+	text-decoration: line-through;
+	opacity: 0.375;
+}
+
+ul.toggle > li {
+	list-style: none;
+}
+
+ul {
+	padding-inline-start: 1.7em;
+}
+
+ul > li {
+	padding-left: 0.1em;
+}
+
+ol {
+	padding-inline-start: 1.6em;
+}
+
+ol > li {
+	padding-left: 0.2em;
+}
+
+.mono ol {
+	padding-inline-start: 2em;
+}
+
+.mono ol > li {
+	text-indent: -0.4em;
+}
+
+.toggle {
+	padding-inline-start: 0em;
+	list-style-type: none;
+}
+
+/* Indent toggle children */
+.toggle > li > details {
+	padding-left: 1.7em;
+}
+
+.toggle > li > details > summary {
+	margin-left: -1.1em;
+}
+
+.selected-value {
+	display: inline-block;
+	padding: 0 0.5em;
+	background: rgba(206, 205, 202, 0.5);
+	border-radius: 3px;
+	margin-right: 0.5em;
+	margin-top: 0.3em;
+	margin-bottom: 0.3em;
+	white-space: nowrap;
+}
+
+.collection-title {
+	display: inline-block;
+	margin-right: 1em;
+}
+
+.page-description {
+	margin-bottom: 2em;
+}
+
+.simple-table {
+	margin-top: 1em;
+	font-size: 0.875rem;
+	empty-cells: show;
+}
+.simple-table td {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table th {
+	height: 29px;
+	min-width: 120px;
+}
+
+.simple-table-header-color {
+	background: rgb(247, 246, 243);
+	color: black;
+}
+.simple-table-header {
+	font-weight: 500;
+}
+
+time {
+	opacity: 0.5;
+}
+
+.icon {
+	display: inline-block;
+	max-width: 1.2em;
+	max-height: 1.2em;
+	text-decoration: none;
+	vertical-align: text-bottom;
+	margin-right: 0.5em;
+}
+
+img.icon {
+	border-radius: 3px;
+}
+
+.user-icon {
+	width: 1.5em;
+	height: 1.5em;
+	border-radius: 100%;
+	margin-right: 0.5rem;
+}
+
+.user-icon-inner {
+	font-size: 0.8em;
+}
+
+.text-icon {
+	border: 1px solid #000;
+	text-align: center;
+}
+
+.page-cover-image {
+	display: block;
+	object-fit: cover;
+	width: 100%;
+	max-height: 30vh;
+}
+
+.page-header-icon {
+	font-size: 3rem;
+	margin-bottom: 1rem;
+}
+
+.page-header-icon-with-cover {
+	margin-top: -0.72em;
+	margin-left: 0.07em;
+}
+
+.page-header-icon img {
+	border-radius: 3px;
+}
+
+.link-to-page {
+	margin: 1em 0;
+	padding: 0;
+	border: none;
+	font-weight: 500;
+}
+
+p > .user {
+	opacity: 0.5;
+}
+
+td > .user,
+td > time {
+	white-space: nowrap;
+}
+
+input[type="checkbox"] {
+	transform: scale(1.5);
+	margin-right: 0.6em;
+	vertical-align: middle;
+}
+
+p {
+	margin-top: 0.5em;
+	margin-bottom: 0.5em;
+}
+
+.image {
+	border: none;
+	margin: 1.5em 0;
+	padding: 0;
+	border-radius: 0;
+	text-align: center;
+}
+
+.code,
+code {
+	background: rgba(135, 131, 120, 0.15);
+	border-radius: 3px;
+	padding: 0.2em 0.4em;
+	border-radius: 3px;
+	font-size: 85%;
+	tab-size: 2;
+}
+
+code {
+	color: #eb5757;
+}
+
+.code {
+	padding: 1.5em 1em;
+}
+
+.code-wrap {
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.code > code {
+	background: none;
+	padding: 0;
+	font-size: 100%;
+	color: inherit;
+}
+
+blockquote {
+	font-size: 1.25em;
+	margin: 1em 0;
+	padding-left: 1em;
+	border-left: 3px solid rgb(55, 53, 47);
+}
+
+.bookmark {
+	text-decoration: none;
+	max-height: 8em;
+	padding: 0;
+	display: flex;
+	width: 100%;
+	align-items: stretch;
+}
+
+.bookmark-title {
+	font-size: 0.85em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	height: 1.75em;
+	white-space: nowrap;
+}
+
+.bookmark-text {
+	display: flex;
+	flex-direction: column;
+}
+
+.bookmark-info {
+	flex: 4 1 180px;
+	padding: 12px 14px 14px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+
+.bookmark-image {
+	width: 33%;
+	flex: 1 1 180px;
+	display: block;
+	position: relative;
+	object-fit: cover;
+	border-radius: 1px;
+}
+
+.bookmark-description {
+	color: rgba(55, 53, 47, 0.6);
+	font-size: 0.75em;
+	overflow: hidden;
+	max-height: 4.5em;
+	word-break: break-word;
+}
+
+.bookmark-href {
+	font-size: 0.75em;
+	margin-top: 0.25em;
+}
+
+.sans { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; }
+.code { font-family: "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace; }
+.serif { font-family: Lyon-Text, Georgia, ui-serif, serif; }
+.mono { font-family: iawriter-mono, Nitti, Menlo, Courier, monospace; }
+.pdf .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK JP'; }
+.pdf:lang(zh-CN) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK SC'; }
+.pdf:lang(zh-TW) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK TC'; }
+.pdf:lang(ko-KR) .sans { font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol", 'Twemoji', 'Noto Color Emoji', 'Noto Sans CJK KR'; }
+.pdf .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .code { font-family: Source Code Pro, "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.pdf .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK JP'; }
+.pdf:lang(zh-CN) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK SC'; }
+.pdf:lang(zh-TW) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK TC'; }
+.pdf:lang(ko-KR) .serif { font-family: PT Serif, Lyon-Text, Georgia, ui-serif, serif, 'Twemoji', 'Noto Color Emoji', 'Noto Serif CJK KR'; }
+.pdf .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK JP'; }
+.pdf:lang(zh-CN) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK SC'; }
+.pdf:lang(zh-TW) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK TC'; }
+.pdf:lang(ko-KR) .mono { font-family: PT Mono, iawriter-mono, Nitti, Menlo, Courier, monospace, 'Twemoji', 'Noto Color Emoji', 'Noto Sans Mono CJK KR'; }
+.highlight-default {
+	color: rgba(55, 53, 47, 1);
+}
+.highlight-gray {
+	color: rgba(120, 119, 116, 1);
+	fill: rgba(120, 119, 116, 1);
+}
+.highlight-brown {
+	color: rgba(159, 107, 83, 1);
+	fill: rgba(159, 107, 83, 1);
+}
+.highlight-orange {
+	color: rgba(217, 115, 13, 1);
+	fill: rgba(217, 115, 13, 1);
+}
+.highlight-yellow {
+	color: rgba(203, 145, 47, 1);
+	fill: rgba(203, 145, 47, 1);
+}
+.highlight-teal {
+	color: rgba(68, 131, 97, 1);
+	fill: rgba(68, 131, 97, 1);
+}
+.highlight-blue {
+	color: rgba(51, 126, 169, 1);
+	fill: rgba(51, 126, 169, 1);
+}
+.highlight-purple {
+	color: rgba(144, 101, 176, 1);
+	fill: rgba(144, 101, 176, 1);
+}
+.highlight-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.highlight-red {
+	color: rgba(212, 76, 71, 1);
+	fill: rgba(212, 76, 71, 1);
+}
+.highlight-default_background {
+	color: rgba(55, 53, 47, 1);
+}
+.highlight-gray_background {
+	background: rgba(241, 241, 239, 1);
+}
+.highlight-brown_background {
+	background: rgba(244, 238, 238, 1);
+}
+.highlight-orange_background {
+	background: rgba(251, 236, 221, 1);
+}
+.highlight-yellow_background {
+	background: rgba(251, 243, 219, 1);
+}
+.highlight-teal_background {
+	background: rgba(237, 243, 236, 1);
+}
+.highlight-blue_background {
+	background: rgba(231, 243, 248, 1);
+}
+.highlight-purple_background {
+	background: rgba(244, 240, 247, 0.8);
+}
+.highlight-pink_background {
+	background: rgba(249, 238, 243, 0.8);
+}
+.highlight-red_background {
+	background: rgba(253, 235, 236, 1);
+}
+.block-color-default {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray {
+	color: rgba(120, 119, 116, 1);
+	fill: rgba(120, 119, 116, 1);
+}
+.block-color-brown {
+	color: rgba(159, 107, 83, 1);
+	fill: rgba(159, 107, 83, 1);
+}
+.block-color-orange {
+	color: rgba(217, 115, 13, 1);
+	fill: rgba(217, 115, 13, 1);
+}
+.block-color-yellow {
+	color: rgba(203, 145, 47, 1);
+	fill: rgba(203, 145, 47, 1);
+}
+.block-color-teal {
+	color: rgba(68, 131, 97, 1);
+	fill: rgba(68, 131, 97, 1);
+}
+.block-color-blue {
+	color: rgba(51, 126, 169, 1);
+	fill: rgba(51, 126, 169, 1);
+}
+.block-color-purple {
+	color: rgba(144, 101, 176, 1);
+	fill: rgba(144, 101, 176, 1);
+}
+.block-color-pink {
+	color: rgba(193, 76, 138, 1);
+	fill: rgba(193, 76, 138, 1);
+}
+.block-color-red {
+	color: rgba(212, 76, 71, 1);
+	fill: rgba(212, 76, 71, 1);
+}
+.block-color-default_background {
+	color: inherit;
+	fill: inherit;
+}
+.block-color-gray_background {
+	background: rgba(241, 241, 239, 1);
+}
+.block-color-brown_background {
+	background: rgba(244, 238, 238, 1);
+}
+.block-color-orange_background {
+	background: rgba(251, 236, 221, 1);
+}
+.block-color-yellow_background {
+	background: rgba(251, 243, 219, 1);
+}
+.block-color-teal_background {
+	background: rgba(237, 243, 236, 1);
+}
+.block-color-blue_background {
+	background: rgba(231, 243, 248, 1);
+}
+.block-color-purple_background {
+	background: rgba(244, 240, 247, 0.8);
+}
+.block-color-pink_background {
+	background: rgba(249, 238, 243, 0.8);
+}
+.block-color-red_background {
+	background: rgba(253, 235, 236, 1);
+}
+.select-value-color-uiBlue { background-color: rgba(35, 131, 226, .07); }
+.select-value-color-pink { background-color: rgba(245, 224, 233, 1); }
+.select-value-color-purple { background-color: rgba(232, 222, 238, 1); }
+.select-value-color-green { background-color: rgba(219, 237, 219, 1); }
+.select-value-color-gray { background-color: rgba(227, 226, 224, 1); }
+.select-value-color-transparentGray { background-color: rgba(227, 226, 224, 0); }
+.select-value-color-translucentGray { background-color: rgba(0, 0, 0, 0.06); }
+.select-value-color-orange { background-color: rgba(250, 222, 201, 1); }
+.select-value-color-brown { background-color: rgba(238, 224, 218, 1); }
+.select-value-color-red { background-color: rgba(255, 226, 221, 1); }
+.select-value-color-yellow { background-color: rgba(253, 236, 200, 1); }
+.select-value-color-blue { background-color: rgba(211, 229, 239, 1); }
+.select-value-color-pageGlass { background-color: undefined; }
+.select-value-color-washGlass { background-color: undefined; }
+
+.checkbox {
+	display: inline-flex;
+	vertical-align: text-bottom;
+	width: 16;
+	height: 16;
+	background-size: 16px;
+	margin-left: 2px;
+	margin-right: 5px;
+}
+
+.checkbox-on {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20width%3D%2216%22%20height%3D%2216%22%20fill%3D%22%2358A9D7%22%2F%3E%0A%3Cpath%20d%3D%22M6.71429%2012.2852L14%204.9995L12.7143%203.71436L6.71429%209.71378L3.28571%206.2831L2%207.57092L6.71429%2012.2852Z%22%20fill%3D%22white%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+
+.checkbox-off {
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%3Crect%20x%3D%220.75%22%20y%3D%220.75%22%20width%3D%2214.5%22%20height%3D%2214.5%22%20fill%3D%22white%22%20stroke%3D%22%2336352F%22%20stroke-width%3D%221.5%22%2F%3E%0A%3C%2Fsvg%3E");
+}
+	
+</style></head><body><article id="18c41736-f0fd-806e-b39d-c35031758885" class="page mono" style="margin-top: 156px;"><header><h1 class="page-title">group relative policy optimization (GRPO)</h1><p class="page-description"></p></header><div class="page-body"><nav id="18c41736-f0fd-8051-9119-c196a221f7bd" class="block-color-gray table_of_contents"><div class="table_of_contents-item table_of_contents-indent-0"><a class="table_of_contents-link" href="#18c41736-f0fd-809f-a185-c3439e838d03">intro</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-806d-b74c-d3289aab19a6">terms to remember</a></div><div class="table_of_contents-item table_of_contents-indent-0"><a class="table_of_contents-link" href="#18c41736-f0fd-8015-a640-d5d0651fe258">environment</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-8077-b867-e32ae1f038c3">cartpole environment</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-80be-81b3-c94c403a6fd4">sparse rewards</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-80e8-b133-f767f6a79bfe">text generation environment</a></div><div class="table_of_contents-item table_of_contents-indent-0"><a class="table_of_contents-link" href="#18c41736-f0fd-8067-8e7c-d2841f44fd31">REINFORCE algorithm</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-80f9-a879-f8f2f5625eef">step by step</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-80e9-86bf-d29416b7deb8">implementation</a></div><div class="table_of_contents-item table_of_contents-indent-0"><a class="table_of_contents-link" href="#18c41736-f0fd-80b7-bf1e-e3bd5b0ae635">GRPO algorithm</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-80ce-b975-cd7a9c4f49a8">step by step</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-8026-9383-cf498ae11cae">intuitions</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-8055-97b8-cb9f6ea5177d">implementation</a></div><div class="table_of_contents-item table_of_contents-indent-0"><a class="table_of_contents-link" href="#18c41736-f0fd-80e9-b65d-cb78c3e40c71">using GRPO on LLMs</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-802b-8641-ef8a55a2a94d">setup</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-8070-b083-cc14a38b77c5">modified loss function</a></div><div class="table_of_contents-item table_of_contents-indent-1"><a class="table_of_contents-link" href="#18c41736-f0fd-80d0-8ad7-d433b18ace6d">deepseek r1</a></div><div class="table_of_contents-item table_of_contents-indent-0"><a class="table_of_contents-link" href="#18c41736-f0fd-80fb-9c82-c75ddc10477b">references</a></div></nav><h1 id="18c41736-f0fd-809f-a185-c3439e838d03" class="">intro</h1><hr id="18c41736-f0fd-80ce-b2cf-fa1719a119e7"/><p id="18c41736-f0fd-8056-bd7a-ce712e86ea5f" class="">
+</p><ul id="18c41736-f0fd-801c-87b4-fbe9e56ec510" class="bulleted-list"><li style="list-style-type:disc">here, i will explain and implement GRPO in an intuitive way</li></ul><ul id="18c41736-f0fd-8077-ba65-ffe6b519e008" class="bulleted-list"><li style="list-style-type:disc">prerequisites:<ul id="18c41736-f0fd-8015-8fd5-cc5720642c26" class="bulleted-list"><li style="list-style-type:circle">you should be familiar with neural networks and gradient descent</li></ul><ul id="18c41736-f0fd-8081-9f5c-f5eab7f42482" class="bulleted-list"><li style="list-style-type:circle">you should be familiar with pytorch</li></ul></li></ul><ul id="18c41736-f0fd-8074-9116-d8697dbd1364" class="bulleted-list"><li style="list-style-type:disc">it&#x27;s okay if you are not familiar with deep RL</li></ul><h2 id="18c41736-f0fd-806d-b74c-d3289aab19a6" class="">terms to remember</h2><p id="18c41736-f0fd-8026-9b4f-fb8a13b947fa" class="">
+</p><p id="18c41736-f0fd-80a1-a58e-dfc124584928" class="">a little vocabulary goes a long way towards being able to understand this topic.</p><p id="18c41736-f0fd-809e-b920-da2497970c82" class="">
+</p><ul id="18c41736-f0fd-80e5-a221-d587c96f5296" class="bulleted-list"><li style="list-style-type:disc"><strong>agent</strong>: the learner or decision-maker that interacts with an environment. in deep reinforcement learning, this is typically a neural network that learns to make decisions.</li></ul><ul id="18c41736-f0fd-8015-aa92-d1bdb95a4d26" class="bulleted-list"><li style="list-style-type:disc"><strong>environment</strong>: the world that the agent interacts with, which could be anything from a video game to a robotic simulation to a real-world setting. the environment provides observations and rewards to the agent.</li></ul><ul id="18c41736-f0fd-80e2-aaad-f83a37d2bfad" class="bulleted-list"><li style="list-style-type:disc"><strong>action</strong>: a move or decision that the agent can make to influence the environment. the set of all possible actions is called the action space.</li></ul><ul id="18c41736-f0fd-803e-884a-f380d9131ebb" class="bulleted-list"><li style="list-style-type:disc"><strong>reward</strong>: a numerical value that tells the agent how good or bad its last action or sequence of actions was. the agent&#x27;s goal is to maximize its cumulative reward over time.</li></ul><ul id="18c41736-f0fd-8078-8638-d3274c360c5d" class="bulleted-list"><li style="list-style-type:disc"><strong>policy</strong>: the method that the agent uses to decide which actions to take in each state. in deep RL, the policy is represented by a neural network.</li></ul><ul id="18c41736-f0fd-80e1-b1e9-ff0631eebb75" class="bulleted-list"><li style="list-style-type:disc"><strong>trajectory</strong>: the sequence of states, actions, and rewards that occur during an episode or training run.</li></ul><h1 id="18c41736-f0fd-8015-a640-d5d0651fe258" class="">environment</h1><hr id="18c41736-f0fd-80f8-bb5f-c75107d1ce55"/><h2 id="18c41736-f0fd-8077-b867-e32ae1f038c3" class="">cartpole environment</h2><p id="18c41736-f0fd-8056-b919-fd3911fecfb6" class="">
+</p><p id="18c41736-f0fd-8096-bea2-c39d1d1af867" class="">cartpole is a simple environment that we&#x27;ll use for easy explaination:</p><ul id="18c41736-f0fd-80ba-99d5-f59c9ad8f8df" class="bulleted-list"><li style="list-style-type:disc">we have a movable cart, and a pole that needs to be balanced on it</li></ul><ul id="18c41736-f0fd-80af-8678-db3f2724a273" class="bulleted-list"><li style="list-style-type:disc">as an agent, you have two actions, move the cart left, or move it right</li></ul><ul id="18c41736-f0fd-80e8-9de7-ce54366236d0" class="bulleted-list"><li style="list-style-type:disc">you cannot move the cart too far in either direction, or the game ends</li></ul><ul id="18c41736-f0fd-8020-a10b-d96aafae6a1f" class="bulleted-list"><li style="list-style-type:disc">you need to move the cart such that the pole on it remains balanced, and does not fall</li></ul><ul id="18c41736-f0fd-80f2-acb3-fdaa9341abbd" class="bulleted-list"><li style="list-style-type:disc">if the pole falls, the game ends</li></ul><h2 id="18c41736-f0fd-80be-81b3-c94c403a6fd4" class="">sparse rewards</h2><p id="18c41736-f0fd-8010-a682-f384058468b3" class="">
+</p><p id="18c41736-f0fd-8018-8d66-e030eb25b93a" class="">so normally, the env gives us a reward of +1 for every time-step/frame through which the pole remains upright. but, what we do is we take an episode, which is minimum(200, step at which the pole loses balance) and calculate the total rewards we receive in that episode.</p><p id="18c41736-f0fd-80c7-a9e4-d538ccc883af" class="">
+</p><p id="18c41736-f0fd-80d4-af95-d9d48790c326" class="">this sum total is the only number we consider as our reward, and we do not record or use the individual rewards given at each time step. therefore, we have one reward value for an entire episode of time steps (sparse), as opposed to one reward at every time step (dense).</p><h2 id="18c41736-f0fd-80e8-b133-f767f6a79bfe" class="">text generation environment</h2><p id="18c41736-f0fd-80ed-a93a-d6c35ce6a1b7" class="">
+</p><p id="18c41736-f0fd-80aa-83ba-ff4737cf35dc" class="">how is the cartpole env similar to LLM training:</p><ul id="18c41736-f0fd-8037-af0f-f7bbfacd9ba1" class="bulleted-list"><li style="list-style-type:disc">in LLM training, an episode is the same as generating a complete response to a prompt, and each time step in the episode is same as generating one token of the response.</li></ul><ul id="18c41736-f0fd-8010-ae2b-c566b45373f7" class="bulleted-list"><li style="list-style-type:disc">after generating an entire response, we can come up with a way to determine if the response is correct or incorrect, good or bad. e.g. if your response is a program, you can run it against test cases to see it it passes all of them.</li></ul><ul id="18c41736-f0fd-80a8-a463-f372a180bf64" class="bulleted-list"><li style="list-style-type:disc">so you judge the entire response as one, and define a reward value based on that judgement</li></ul><ul id="18c41736-f0fd-8088-8c08-d92a5939d9c3" class="bulleted-list"><li style="list-style-type:disc">therefore, you have sparse rewards here as well - you go through an episode of time steps, and generate a series of tokens and assign a reward value for the entire episode</li></ul><p id="18c41736-f0fd-80cc-aa82-d63fccb46bb5" class="">more on this in later sections!</p><p id="18c41736-f0fd-80f7-8f67-c2b133decace" class="">
+</p><h1 id="18c41736-f0fd-8067-8e7c-d2841f44fd31" class="">REINFORCE algorithm</h1><hr id="18c41736-f0fd-80d4-849f-ec4bd8de90e4"/><p id="18c41736-f0fd-8019-b466-fda212c2e34a" class="">REINFORCE is probably the first and simplest algorithm you&#x27;ll learn about in deep RL. we&#x27;ll go over it once, then build up GRPO on top of it.</p><h2 id="18c41736-f0fd-80f9-a879-f8f2f5625eef" class="">step by step</h2><p id="18c41736-f0fd-806f-8e3f-e646d3185229" class="">
+</p><p id="18c41736-f0fd-80d3-82a4-c4360de5a73a" class="">REINFORCE is an extremely straightforward algorithm.</p><p id="18c41736-f0fd-802b-a16d-c327523e3172" class="">
+</p><ul id="18c41736-f0fd-80f8-aacb-d3d669556947" class="bulleted-list"><li style="list-style-type:disc"><strong>step 0</strong> - what do we start with? we have a neural network called the policy network. this network is basically a classifier which processes the observations from the env and gives us probabilities to select each of the actions</li></ul><p id="18c41736-f0fd-804f-a62c-c1c5589041f3" class="">
+</p><ul id="18c41736-f0fd-8054-9040-d40c1f9214be" class="bulleted-list"><li style="list-style-type:disc"><strong>step 1</strong> - go through an episode of actions i.e. sample an action from the policy net and execute it in the environment to get new observations. we will do this till we get to 200 steps, or, till the game ends (pole falls, or cart is moved too far). for each step, we will record the log of probabilty of the chosen action</li></ul><p id="18c41736-f0fd-80ef-badb-c6001fdfe952" class="">
+</p><ul id="18c41736-f0fd-804e-bb8f-c418697e25c2" class="bulleted-list"><li style="list-style-type:disc"><strong>step 2</strong> - now ideally to train the policy network, we would have liked to have a label for every time step - one that pointed to the ideal action that should have been taken over there. coming up with labels like that is not practical, so we resort to reinforcement learning. if we had labels, we would of computed the cross entropy loss for each time step and updated the network using gradient descent to minimize that loss.</li></ul><p id="18c41736-f0fd-8002-8659-d827c1ceab20" class="">
+</p><ul id="18c41736-f0fd-80e3-9173-c572bac542a0" class="bulleted-list"><li style="list-style-type:disc"><strong>step 3</strong> - we know a single reward value for the entire episode of actions, which tells us how good or bad the entire sequence of actions was. so we simply use reward to calculate a loss value at each time step using the following formula: <code>loss = -logprob * reward</code><p id="18c41736-f0fd-804f-b1e7-c16da22453f6" class="">minimizing this loss would mean the encouraging all the outputs of the policy net in the episode which went well, and dicouraging all the outputs of the policy net in the episode which did not go well.</p><p id="18c41736-f0fd-802c-9a7d-d235d8d9b24d" class=""><em>if you think about it, it&#x27;s not optimal at all, because the policy net could have given some good outputs at some of the time steps in episodes which did not get high reward value, and it could also have given some bad outputs somewhere in the episodes which got a high reward value. using the loss we have defined would mean ocassionaly encouraging the bad outputs and discouraging the good outputs. but, that&#x27;s okay. in the long run, we will end up discouraging more bad outputs than good ones, and encouraging more good outputs than the bad one, and the policy net will learn to provide good outputs most of the times.</em></p><p id="18c41736-f0fd-80e2-8e2c-da70fafbae2d" class="">
+</p></li></ul><ul id="18c41736-f0fd-8005-9633-eb31468df334" class="bulleted-list"><li style="list-style-type:disc"><strong>step 4</strong> - using the sum of losses at each time step as the final loss, apply gradient descent to update the parameters of the policy net, teaching it to produce better outputs that lead to better episodes.</li></ul><p id="18c41736-f0fd-804d-9869-f3a895508baf" class="">
+</p><p id="18c41736-f0fd-8032-b825-c78c13d5ba07" class="">that&#x27;s it - we can code this using pytorch and watch as the policy net learns to balance the pole!</p><h2 id="18c41736-f0fd-80e9-86bf-d29416b7deb8" class="">implementation</h2><script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerPolicy="no-referrer"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerPolicy="no-referrer"/><pre id="18c41736-f0fd-80dd-8b4b-d0ebc47e6c09" class="code"><code class="language-Python">import gym
+
+env = gym.make(&#x27;CartPole-v0&#x27;)
+
+import torch
+
+class PolicyNet(torch.nn.Module):
+    def __init__(self):
+        super(PolicyNet, self).__init__()
+        self.fc1 = torch.nn.Linear(4, 64)
+        self.fc2 = torch.nn.Linear(64, 2)
+
+    def forward(self, x):
+        x = torch.nn.functional.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+net = PolicyNet()
+optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+gamma = 0.99
+
+episode_reward_window = []
+
+for i_episode in range(5000):
+    observation = env.reset()
+    log_probs = []
+    episode_reward = 0
+
+    for t in range(200):
+        # get prob distribution over actions
+        logits = net(torch.from_numpy(observation).float())
+        probs = torch.nn.functional.softmax(logits, dim=-1)
+        # sample an action
+        action = torch.multinomial(probs, 1).item()
+        # take the action
+        observation, reward, done, info = env.step(action)
+        # save prob of chosen action and reward
+        log_prob = torch.log(probs[action])
+        log_probs.append(log_prob)
+
+        episode_reward += reward
+        if done:
+            break
+
+    normalized_reward = episode_reward / 200.0
+    # calculate policy gradient loss
+    policy_loss = []
+    for log_prob in log_probs:
+        policy_loss.append(-log_prob * normalized_reward)
+
+    policy_loss = torch.stack(policy_loss).sum()
+
+    # update the weights
+    optimizer.zero_grad()
+    policy_loss.backward()
+    optimizer.step()
+
+    episode_reward_window.append(episode_reward)
+    if len(episode_reward_window) &gt; 100:
+        episode_reward_window.pop(0)
+    avg_reward = sum(episode_reward_window) / len(episode_reward_window)
+
+    if avg_reward &gt; 195:
+        print(&#x27;solved at episode&#x27;, i_episode)
+        break
+
+    if i_episode % 100 == 0:
+        print(&#x27;episode&#x27;, i_episode, &#x27;avg_reward&#x27;, avg_reward)
+
+env.close()</code></pre><p id="18c41736-f0fd-8054-9d4d-c3344603429b" class="">output:</p><script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerPolicy="no-referrer"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerPolicy="no-referrer"/><pre id="18c41736-f0fd-80b3-ae87-d32197d06e0e" class="code"><code class="language-Plain Text" style="white-space:pre-wrap;word-break:break-all">episode 0 avg_reward 22.0
+episode 100 avg_reward 28.19
+episode 200 avg_reward 34.18
+episode 300 avg_reward 45.6
+episode 400 avg_reward 52.6
+episode 500 avg_reward 48.85
+episode 600 avg_reward 62.62
+episode 700 avg_reward 62.77
+episode 800 avg_reward 75.66
+episode 900 avg_reward 87.99
+episode 1000 avg_reward 86.86
+episode 1100 avg_reward 84.97
+episode 1200 avg_reward 113.23
+episode 1300 avg_reward 121.71
+episode 1400 avg_reward 147.15
+episode 1500 avg_reward 145.25
+episode 1600 avg_reward 141.25
+episode 1700 avg_reward 175.02
+episode 1800 avg_reward 180.84
+episode 1900 avg_reward 177.19
+episode 2000 avg_reward 184.84
+episode 2100 avg_reward 190.68
+solved at episode 2191</code></pre><p id="18c41736-f0fd-8001-97c3-f5c8be700552" class="">
+</p><h1 id="18c41736-f0fd-80b7-bf1e-e3bd5b0ae635" class="">GRPO algorithm</h1><hr id="18c41736-f0fd-8077-992f-de95669f78d5"/><h2 id="18c41736-f0fd-80ce-b975-cd7a9c4f49a8" class="">step by step</h2><p id="18c41736-f0fd-80d6-ac0e-e2391815896e" class="">
+</p><p id="18c41736-f0fd-80f7-b458-dc082e345500" class="">GRPO is kinda similar but a much better algorithm.</p><p id="18c41736-f0fd-8044-b5cd-fa41d0642d45" class="">
+</p><ul id="18c41736-f0fd-8014-a412-e46a9aed0d40" class="bulleted-list"><li style="list-style-type:disc"><strong>step 1</strong>: sample G trajectories from the env, where you record the chosen actions, observations, probability of chosen actions at each step</li></ul><p id="18c41736-f0fd-8055-988b-c0f84e96050b" class="">
+</p><ul id="18c41736-f0fd-80b3-88d8-e8316afcc87d" class="bulleted-list"><li style="list-style-type:disc"><strong>step 2</strong>: for each of the G trajectories, you get one reward value</li></ul><p id="18c41736-f0fd-808f-90ea-cbef8f6119b7" class="">
+</p><ul id="18c41736-f0fd-806f-8c59-d1cfc3211976" class="bulleted-list"><li style="list-style-type:disc"><strong>step 3</strong>: now, you normalise the G rewards by subtracting the mean of the G rewards and dividing by the standard deviation of the rewards.</li></ul><p id="18c41736-f0fd-80e6-a191-eeb26675e9e6" class="">
+</p><ul id="18c41736-f0fd-80f8-853a-cb1c35c9be55" class="bulleted-list"><li style="list-style-type:disc"><strong>step 4</strong>: for N iterations<ul id="18c41736-f0fd-8029-aa45-ef8e2fca3a32" class="bulleted-list"><li style="list-style-type:circle"><strong>4(a)</strong>: for each step of each trajectory - calculate the probability of chosen action using the policy network (yes, this probability will be the same as the recorded probability for the very first iteration, but it will change after that) - we will call this <code>new_prob</code></li></ul><ul id="18c41736-f0fd-80b3-b936-f7fed49cc3d1" class="bulleted-list"><li style="list-style-type:circle"><strong>4(b)</strong>: then, you calculate the loss of each step for each of the G trajectories by using the following formula<p id="18c41736-f0fd-8039-bb78-f8fa6a4a35b3" class=""><code>loss = -1 * clip(new_prob/recorded_prob, 1-ε, 1+ε) * normalised_reward</code></p></li></ul><ul id="18c41736-f0fd-80cb-8082-ca12b72462e5" class="bulleted-list"><li style="list-style-type:circle"><strong>4(c)</strong>: take the mean of losses across the steps within each trajectory and across the G trajectories as well. calculate gradients with respect to this loss, and update the policy params accordingly</li></ul></li></ul><h2 id="18c41736-f0fd-8026-9383-cf498ae11cae" class="">intuitions</h2><p id="18c41736-f0fd-80db-a25e-f44021a0552b" class="">
+</p><p id="18c41736-f0fd-80af-bdf8-f9a6231045b2" class="">so tldr; there is a difference in the way we calculate the losses at each step of the trajectory. instead of the log of probability of chosen action, we use the clipped ratio of new probability and recorded probability. and instead of the reward value of the trajectory, we use the reward value normalised across groups.</p><p id="18c41736-f0fd-8008-aa52-d80673cb8d0f" class="">
+</p><p id="18c41736-f0fd-80b1-8403-cf57272aa98f" class=""><strong>why does that matter?</strong></p><p id="18c41736-f0fd-804e-bee4-cba45a206541" class="">
+</p><p id="18c41736-f0fd-8055-99e9-fe186cfe5bc4" class="">in REINFORCE, using <code>-log_prob * reward</code> as the loss:</p><ul id="18c41736-f0fd-8042-b50b-fbdf581d47e2" class="bulleted-list"><li style="list-style-type:disc">for actions inside a ‘good’ episode, the policy is pushed to increase its probability unboundedly</li></ul><ul id="18c41736-f0fd-8093-bc68-cc7953fbec2c" class="bulleted-list"><li style="list-style-type:disc">for actions inside a ‘bad’ episode, the policy is pushed to decrease its probability unboundedly</li></ul><ul id="18c41736-f0fd-8027-9c72-e90b3988c8ba" class="bulleted-list"><li style="list-style-type:disc">this can lead to very large policy updates that might destroy previously learned good behavior</li></ul><p id="18c41736-f0fd-80b9-bd98-e69fd9811030" class="">
+</p><p id="18c41736-f0fd-80a0-8e98-fb6ea76239bb" class="">in GRPO, using <code>clip(new_prob/recorded_prob, 1-ε, 1+ε)</code>:</p><ul id="18c41736-f0fd-80c8-8315-c5641db96415" class="bulleted-list"><li style="list-style-type:disc">the clipping ensures that the policy can&#x27;t change dramatically in a single update</li></ul><ul id="18c41736-f0fd-803b-9999-c9ef5b31d0c7" class="bulleted-list"><li style="list-style-type:disc">for positive rewards: probability can increase but only up to (1+ε) times the old probability</li></ul><ul id="18c41736-f0fd-8067-bdad-def4b260e420" class="bulleted-list"><li style="list-style-type:disc">for negative rewards: probability can decrease but only down to (1-ε) times the old probability</li></ul><ul id="18c41736-f0fd-8017-aaa3-c56944e91ad0" class="bulleted-list"><li style="list-style-type:disc">this creates a &quot;trust region&quot; around the current policy, preventing destructive large updates</li></ul><p id="18c41736-f0fd-8058-8505-f97323a6005f" class="">
+</p><p id="18c41736-f0fd-8063-81b0-f1a1f14080ad" class="">REINFORCE updates after each episode, while GRPO collects G trajectories first - this provides a more stable estimate of policy performance. </p><p id="18c41736-f0fd-80ce-b214-fdbf76d4f936" class="">
+</p><p id="18c41736-f0fd-8041-b46c-df52dbf9529a" class="">GRPO also updates the policy N times using G trajectories as opposed to the single update performed by REINFORCE - this makes it extract more learning from each batch of experience</p><h2 id="18c41736-f0fd-8055-97b8-cb9f6ea5177d" class="">implementation</h2><script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerPolicy="no-referrer"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerPolicy="no-referrer"/><pre id="18c41736-f0fd-801b-a561-f0af67c21358" class="code"><code class="language-Python">import gym
+import torch
+import random
+import numpy as np
+from collections import deque
+
+class PolicyNet(torch.nn.Module):
+    def __init__(self):
+        super(PolicyNet, self).__init__()
+        self.fc1 = torch.nn.Linear(4, 64)
+        self.fc2 = torch.nn.Linear(64, 2)
+
+    def forward(self, x):
+        x = torch.nn.functional.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
+
+def collect_trajectory(env, net):
+    observation = env.reset()
+    log_probs = []
+    observations = []
+    chosen_actions = []
+    episode_reward = 0
+
+    for t in range(200):
+        observations.append(observation)
+        logits = net(torch.from_numpy(observation).float())
+        probs = torch.nn.functional.softmax(logits, dim=0)
+        action = torch.multinomial(probs, 1).item()
+
+        observation, reward, done, info = env.step(action)
+        log_prob = torch.log(probs[action])
+        log_probs.append(log_prob.item())
+        chosen_actions.append(action)
+        episode_reward += reward
+
+        if done:
+            break
+
+    normalized_reward = episode_reward / 200.0 # because max reward possible in this env is 200
+    return observations, log_probs, chosen_actions, normalized_reward
+
+
+def grpo_update(trajectories, net, optimizer, n_iterations=20):
+    rewards = [r for o, l, a, r in trajectories]
+    mean_reward = sum(rewards) / len(rewards)
+    std_reward = np.std(rewards) + 1e-8
+    advantages = [(r - mean_reward) / std_reward for r in rewards]
+
+    for i_iter in range(n_iterations):
+        loss = 0
+        # iterating over each trajectory in the group
+        for traj, advantage in zip(trajectories, advantages):
+            (observations, log_probs, chosen_actions, _) = traj
+            trajectory_loss = 0
+            # iterating over each time step in the trajectory
+            for t in range(len(observations)):
+                new_policy_probs = torch.nn.functional.softmax(net(torch.from_numpy(observations[t]).float()), dim=0)
+                new_log_probs = torch.log(new_policy_probs)[chosen_actions[t]]
+
+                ratio = torch.exp(new_log_probs - log_probs[t])
+                clipped_ratio = torch.clamp(ratio, min=1 - eps, max=1 + eps)
+                trajectory_loss += -clipped_ratio * advantage
+            trajectory_loss /= len(observations)
+            loss += trajectory_loss
+        loss /= len(trajectories)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+
+env = gym.make(&#x27;CartPole-v0&#x27;)
+net = PolicyNet()
+optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+episode_reward_window = deque(maxlen=100)
+
+# GRPO specific parameters
+trajectories_per_update = 5  # group size
+# epsilon for clipping
+eps = 0.2
+
+# training loop
+for i_episode in range(5000):
+    trajectories = []
+    episode_rewards = []
+
+    for _ in range(trajectories_per_update):
+        observations, log_probs, chosen_actions, normalized_reward = collect_trajectory(env, net)
+        trajectories.append((observations, log_probs, chosen_actions, normalized_reward))
+        episode_rewards.append(normalized_reward * 200)  # unnormalize for tracking
+
+    # update policy using grpo on the collected trajectories
+    grpo_update(trajectories, net, optimizer)
+
+    episode_reward_window.extend(episode_rewards)
+    avg_reward = sum(episode_reward_window) / len(episode_reward_window)
+
+    if avg_reward &gt; 195:
+        print(&#x27;solved at episode&#x27;, i_episode)
+        break
+
+    if i_episode % 10 == 0:
+        print(f&#x27;episode {i_episode}, avg reward: {avg_reward:.2f}&#x27;)
+
+env.close()</code></pre><p id="18c41736-f0fd-8095-8266-ee7ab085a07f" class="">output:</p><script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerPolicy="no-referrer"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerPolicy="no-referrer"/><pre id="18c41736-f0fd-80a7-b5d7-e0074670fdc6" class="code"><code class="language-Plain Text" style="white-space:pre-wrap;word-break:break-all">episode 0, avg reward: 22.40
+episode 10, avg reward: 38.49
+episode 20, avg reward: 62.62
+episode 30, avg reward: 134.21
+episode 40, avg reward: 187.82
+episode 50, avg reward: 192.14
+solved at episode 53</code></pre><h1 id="18c41736-f0fd-80e9-b65d-cb78c3e40c71" class="">using GRPO on LLMs</h1><hr id="18c41736-f0fd-80db-9783-dd54a8739634"/><h2 id="18c41736-f0fd-802b-8641-ef8a55a2a94d" class="">setup</h2><p id="18c41736-f0fd-80b4-a8df-eca1ad6938ae" class="">
+</p><p id="18c41736-f0fd-805d-9cbe-c1bbf9788420" class="">with LLMs, we have a very similar setup.</p><ul id="18c41736-f0fd-803d-985c-db31af7f006f" class="bulleted-list"><li style="list-style-type:disc">observations from env === input token sequence</li></ul><ul id="18c41736-f0fd-80a0-9379-d329a6b91852" class="bulleted-list"><li style="list-style-type:disc">action === next token sampled from the output probailities</li></ul><ul id="18c41736-f0fd-8080-a5ea-e2fb990273d9" class="bulleted-list"><li style="list-style-type:disc">reward for trajectory === score given by another model, or rule based checking of the entire sequence of generated tokens</li></ul><p id="18c41736-f0fd-80a2-81ff-fac709c75a44" class="">
+</p><p id="18c41736-f0fd-80be-a5b7-e5ad2bcece19" class="">e.g. the LLM outputs a program for a prompt, so you test it against test cases and calculate a reward score based on that.</p><p id="18c41736-f0fd-80c1-a46d-d954ccd6912b" class="">
+</p><p id="18c41736-f0fd-80ac-aa05-d8e6d372bfb5" class="">they <strong>key insight</strong> you should appreciate is this: </p><p id="18c41736-f0fd-806f-97c0-da993dfe3c53" class="">it&#x27;s way easier to judge and score an entire response compared to individual generated tokens. but RL allows you to train the language model with just that. </p><p id="18c41736-f0fd-809c-8e7e-f30cd494328f" class="">
+</p><p id="18c41736-f0fd-806f-aec8-e6df3b543a0f" class="">during the training the LLM learns its way to generate good and correct responses on its own!</p><h2 id="18c41736-f0fd-8070-b083-cc14a38b77c5" class="">modified loss function</h2><p id="18c41736-f0fd-80b6-b73a-f3bdd678ccbf" class="">
+</p><p id="18c41736-f0fd-80b3-99de-d6d79e5fa41f" class="">the loss function is slightly modified when doing this with LLMs.</p><p id="18c41736-f0fd-80b9-9668-da46ccca16b6" class="">
+</p><p id="18c41736-f0fd-80a4-a4f8-d05506501754" class="">you see, LLMs have already been trained to generate coherent text during their pretraining. we don&#x27;t want them to lose that ability.</p><p id="18c41736-f0fd-802c-994b-db7c94549dcd" class="">
+</p><p id="18c41736-f0fd-80b3-b354-ffc4a7b8ee60" class="">so we add an extra term in the loss calculation - KL penalty.</p><p id="18c41736-f0fd-8095-8a85-d15f2d3e2eca" class="">
+</p><p id="18c41736-f0fd-8068-8ec9-ce4f50ce5e61" class="">before starting GRPO training, we create a copy of the language model, and freeze it. we call this the reference model.</p><p id="18c41736-f0fd-8094-9b81-d0267ae8917f" class="">
+</p><p id="18c41736-f0fd-8030-ba0e-edbc5054aed3" class="">after calculating the loss as shown above, we add the KL penalty between the trained policy and the frozen reference model to it.</p><p id="18c41736-f0fd-807f-9952-dad57bfa4cfc" class="">
+</p><p id="18c41736-f0fd-8060-a5a4-ec6dc306642e" class="">this ensures that policy does not move away from it&#x27;s raw text generation abilities learnt during pretraining.</p><p id="18c41736-f0fd-8006-a267-c1b501cc8c26" class="">
+</p><p id="18c41736-f0fd-807a-b377-c045e53fbe6e" class="">old loss</p><figure id="18c41736-f0fd-80eb-8735-e40ede9ded81" class="equation"><style>@import url('https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css')</style><div class="equation-container"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mn>1</mn><mi>G</mi></mfrac><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><mrow><mo fence="true">(</mo><mfrac><mn>1</mn><msub><mi>T</mi><mi>g</mi></msub></mfrac><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>T</mi><mi>g</mi></msub></munderover><mtext>clipped_ratio</mtext><mo>⋅</mo><mtext>normalised_reward</mtext><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\frac{1}{G} \sum_{g=1}^{G} \left( \frac{1}{T_g} \sum_{t=1}^{T_g} \text{clipped\_ratio} \cdot \text{normalised\_reward} \right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.6em;vertical-align:-1.55em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">G</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">G</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4032em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.875em;height:3.600em;"><svg xmlns="http://www.w3.org/2000/svg" width='0.875em' height='3.600em' viewBox='0 0 875 3600'><path d='M863,9c0,-2,-2,-5,-6,-9c0,0,-17,0,-17,0c-12.7,0,-19.3,0.3,-20,1
+c-5.3,5.3,-10.3,11,-15,17c-242.7,294.7,-395.3,682,-458,1162c-21.3,163.3,-33.3,349,
+-36,557 l0,84c0.2,6,0,26,0,60c2,159.3,10,310.7,24,454c53.3,528,210,
+949.7,470,1265c4.7,6,9.7,11.7,15,17c0.7,0.7,7,1,19,1c0,0,18,0,18,0c4,-4,6,-7,6,-9
+c0,-2.7,-3.3,-8.7,-10,-18c-135.3,-192.7,-235.5,-414.3,-300.5,-665c-65,-250.7,-102.5,
+-544.7,-112.5,-882c-2,-104,-3,-167,-3,-189
+l0,-92c0,-162.7,5.7,-314,17,-454c20.7,-272,63.7,-513,129,-723c65.3,
+-210,155.3,-396.3,270,-559c6.7,-9.3,10,-15.3,10,-18z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.9367em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.4083em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2819em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">clipped_ratio</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">normalised_reward</span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.875em;height:3.600em;"><svg xmlns="http://www.w3.org/2000/svg" width='0.875em' height='3.600em' viewBox='0 0 875 3600'><path d='M76,0c-16.7,0,-25,3,-25,9c0,2,2,6.3,6,13c21.3,28.7,42.3,60.3,
+63,95c96.7,156.7,172.8,332.5,228.5,527.5c55.7,195,92.8,416.5,111.5,664.5
+c11.3,139.3,17,290.7,17,454c0,28,1.7,43,3.3,45l0,9
+c-3,4,-3.3,16.7,-3.3,38c0,162,-5.7,313.7,-17,455c-18.7,248,-55.8,469.3,-111.5,664
+c-55.7,194.7,-131.8,370.3,-228.5,527c-20.7,34.7,-41.7,66.3,-63,95c-2,3.3,-4,7,-6,11
+c0,7.3,5.7,11,17,11c0,0,11,0,11,0c9.3,0,14.3,-0.3,15,-1c5.3,-5.3,10.3,-11,15,-17
+c242.7,-294.7,395.3,-681.7,458,-1161c21.3,-164.7,33.3,-350.7,36,-558
+l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
+-470,-1265c-4.7,-6,-9.7,-11.7,-15,-17c-0.7,-0.7,-6.7,-1,-18,-1z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span></span></span></span></span></div></figure><p id="18c41736-f0fd-804b-b9ba-f18bf54e28f4" class="">
+</p><p id="18c41736-f0fd-801d-b209-d30658e9cfee" class="">new loss</p><figure id="18c41736-f0fd-80bd-8d9d-e014ea5d0382" class="equation"><style>@import url('https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css')</style><div class="equation-container"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mfrac><mn>1</mn><mi>G</mi></mfrac><munderover><mo>∑</mo><mrow><mi>g</mi><mo>=</mo><mn>1</mn></mrow><mi>G</mi></munderover><mrow><mo fence="true">(</mo><mfrac><mn>1</mn><msub><mi>T</mi><mi>g</mi></msub></mfrac><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>T</mi><mi>g</mi></msub></munderover><mrow><mo fence="true">(</mo><mtext>clipped_ratio</mtext><mo>⋅</mo><mtext>normalised_reward</mtext><mo>−</mo><mi>β</mi><mo>⋅</mo><mtext>KL</mtext><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\frac{1}{G} \sum_{g=1}^{G} \left( \frac{1}{T_g} \sum_{t=1}^{T_g} \left( \text{clipped\_ratio} \cdot \text{normalised\_reward} - \beta \cdot \text{KL} \right) \right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.6em;vertical-align:-1.55em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">G</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">G</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4032em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.875em;height:3.600em;"><svg xmlns="http://www.w3.org/2000/svg" width='0.875em' height='3.600em' viewBox='0 0 875 3600'><path d='M863,9c0,-2,-2,-5,-6,-9c0,0,-17,0,-17,0c-12.7,0,-19.3,0.3,-20,1
+c-5.3,5.3,-10.3,11,-15,17c-242.7,294.7,-395.3,682,-458,1162c-21.3,163.3,-33.3,349,
+-36,557 l0,84c0.2,6,0,26,0,60c2,159.3,10,310.7,24,454c53.3,528,210,
+949.7,470,1265c4.7,6,9.7,11.7,15,17c0.7,0.7,7,1,19,1c0,0,18,0,18,0c4,-4,6,-7,6,-9
+c0,-2.7,-3.3,-8.7,-10,-18c-135.3,-192.7,-235.5,-414.3,-300.5,-665c-65,-250.7,-102.5,
+-544.7,-112.5,-882c-2,-104,-3,-167,-3,-189
+l0,-92c0,-162.7,5.7,-314,17,-454c20.7,-272,63.7,-513,129,-723c65.3,
+-210,155.3,-396.3,270,-559c6.7,-9.3,10,-15.3,10,-18z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.9367em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.4083em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1645em;"><span style="top:-2.357em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2819em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord text"><span class="mord">clipped_ratio</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">normalised_reward</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">KL</span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.05em;"><span style="top:-4.05em;"><span class="pstrut" style="height:5.6em;"></span><span style="width:0.875em;height:3.600em;"><svg xmlns="http://www.w3.org/2000/svg" width='0.875em' height='3.600em' viewBox='0 0 875 3600'><path d='M76,0c-16.7,0,-25,3,-25,9c0,2,2,6.3,6,13c21.3,28.7,42.3,60.3,
+63,95c96.7,156.7,172.8,332.5,228.5,527.5c55.7,195,92.8,416.5,111.5,664.5
+c11.3,139.3,17,290.7,17,454c0,28,1.7,43,3.3,45l0,9
+c-3,4,-3.3,16.7,-3.3,38c0,162,-5.7,313.7,-17,455c-18.7,248,-55.8,469.3,-111.5,664
+c-55.7,194.7,-131.8,370.3,-228.5,527c-20.7,34.7,-41.7,66.3,-63,95c-2,3.3,-4,7,-6,11
+c0,7.3,5.7,11,17,11c0,0,11,0,11,0c9.3,0,14.3,-0.3,15,-1c5.3,-5.3,10.3,-11,15,-17
+c242.7,-294.7,395.3,-681.7,458,-1161c21.3,-164.7,33.3,-350.7,36,-558
+l0,-144c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
+-470,-1265c-4.7,-6,-9.7,-11.7,-15,-17c-0.7,-0.7,-6.7,-1,-18,-1z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.55em;"><span></span></span></span></span></span></span></span></span></span></span></span></div></figure><p id="18c41736-f0fd-80d2-8366-cbb538d9e9c6" class="">
+</p><p id="18c41736-f0fd-8019-b55f-cadb6f0d41b8" class="">KL penalty is calculated by using the output probabilities from our policy language model, and our frozen reference language model.</p><p id="18c41736-f0fd-803e-8d73-def4a71c33ac" class="">
+</p><p id="18c41736-f0fd-8095-88d0-c2fa1290a87e" class="">for a given observation and chosen action from our recorded trajectories, get the outputs from both models, and get the probability assigned by each model to the chosen action.</p><p id="18c41736-f0fd-805f-8097-cb4b0ce24ff4" class="">
+</p><p id="18c41736-f0fd-809a-9e90-c4d6feb55b05" class="">let’s say the probabilities are <code>prob</code> and <code>prob_ref</code></p><p id="18c41736-f0fd-803b-b967-f25f0c550e04" class="">KL penalty is calculated as:</p><script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerPolicy="no-referrer"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerPolicy="no-referrer"/><pre id="18c41736-f0fd-805b-93ea-d3e069c25bf2" class="code"><code class="language-Python">kl_penalty = prob_ref/prob - log(prob_ref/prob) - 1</code></pre><h2 id="18c41736-f0fd-80d0-8ad7-d433b18ace6d" class="">deepseek r1</h2><p id="18c41736-f0fd-80db-b47c-cdabe927e573" class="">GRPO became popular primarily due to the success of deepseek r1, which used this algorithm to train reasoning capabilities into their base language model.</p><p id="18c41736-f0fd-8000-bf06-cb75d5bcf273" class="">
+</p><p id="18c41736-f0fd-80ed-ab7b-efe5dbb3c434" class="">so what did the language model learn?</p><p id="18c41736-f0fd-8081-b272-fd83047c8727" class="">
+</p><p id="18c41736-f0fd-80bd-b2fa-d4d3b3b54725" class="">as stated above, they would start with the a prompt as the initial observation. and they followed this template:</p><script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" integrity="sha512-7Z9J3l1+EYfeaPKcGXu3MS/7T+w19WtKQY/n+xzmw4hZhJ9tyYmcUS+4QqAlzhicE5LAfMQSF3iFTK9bQdTxXg==" crossorigin="anonymous" referrerPolicy="no-referrer"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" integrity="sha512-tN7Ec6zAFaVSG3TpNAKtk4DOHNpSwKHxxrsiw4GHKESGPs5njn/0sMCUMl2svV4wo4BK/rCP7juYz+zx+l6oeQ==" crossorigin="anonymous" referrerPolicy="no-referrer"/><pre id="18c41736-f0fd-8024-a071-efc0edeeaf8a" class="code"><code class="language-Plain Text">A conversation between User and Assistant. The user asks a question, and the Assistant solves it.
+The assistant first thinks about the reasoning process in the mind and then provides the user
+with the answer. The reasoning process and answer are enclosed within &lt;think&gt; &lt;/think&gt; and
+&lt;answer&gt; &lt;/answer&gt; tags, respectively, i.e., &lt;think&gt; reasoning process here &lt;/think&gt;
+&lt;answer&gt; answer here &lt;/answer&gt;. User: prompt. Assistant:</code></pre><p id="18c41736-f0fd-8082-9ada-ea97580d5cf8" class="">
+</p><p id="18c41736-f0fd-8002-bfbd-ec22fd1d37a7" class="">then they would give a reward based on rule based systems that could verify when the answer was correct.</p><p id="18c41736-f0fd-80bd-a6e6-fb387693cf07" class="">
+</p><p id="18c41736-f0fd-8011-8981-e082eca0a129" class="">somewhere during the training, the model would learn to generate more tokens between the think tags. this allows the model to re-evaluate its initial approach to the given problem, and correct it if needed.</p><p id="18c41736-f0fd-8016-8755-cf3d0da5914d" class="">
+</p><p id="18c41736-f0fd-8036-9d90-f8dedc0c5040" class="">consider how this behaviour emerges on its own. the training objective only cares that the model generates a correct answer, and generates coherent text. the model learns to come up with a series of tokens (actions) that allow it to come up with correct answers more often.</p><p id="18c41736-f0fd-80eb-b100-d9bb277266f5" class="">
+</p><p id="18c41736-f0fd-80ef-af8c-dbf76e9c4c64" class=""><em>okay that’s it for this article!</em></p><p id="18c41736-f0fd-80ec-aa87-d79465969207" class="">
+</p><p id="18c41736-f0fd-80a6-821b-dfb58a48bb2c" class="">DM me if you have any questions at <a href="https://x.com/_apoorvnandan">twitter/X</a>.</p><p id="18c41736-f0fd-80e9-86a5-f252ff916060" class=""><a href="http://buymeacoffee.com/apoorvn">buy me a coffee</a> if you’d like to support me.</p><p id="18c41736-f0fd-8062-9f42-f6a666801898" class="">
+</p><h1 id="18c41736-f0fd-80fb-9c82-c75ddc10477b" class="">references</h1><ul id="18c41736-f0fd-80b7-8d73-c7cc3e0af785" class="bulleted-list"><li style="list-style-type:disc">if you’d like to read the paper, i’d suggest reading the deepseek math paper where this algorithm was first presented. (<a href="https://arxiv.org/pdf/2402.03300">link</a>)</li></ul><ul id="18c41736-f0fd-8052-92c5-ce3ea6d31a0b" class="bulleted-list"><li style="list-style-type:disc">this algorithm has also been implemented in the TRL library for language models and you can go through the relevant code <a href="https://github.com/huggingface/trl/blob/main/trl/trainer/grpo_trainer.py">here</a></li></ul><p id="18c41736-f0fd-80c0-8926-dadfe462c597" class="">
+</p></div></article><span class="sans" style="font-size:14px;padding-top:2em"></span></body></html>
