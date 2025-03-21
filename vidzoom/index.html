@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+<meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vedit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet">
+    <script src="./ffmpeg.min.js"></script>
+    <style>
+      /* Add styles for timeline indicator and handle */
+      #timeline {
+        position: relative;
+        cursor: pointer;
+        overflow: visible;
+      }
+      .time-indicator {
+        position: absolute;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        background-color: #FF4444;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .time-handle {
+        position: absolute;
+        top: -10px;
+        width: 12px;
+        height: 20px;
+        margin-left: -6px;
+        background-color: #FF4444;
+        border-radius: 4px;
+        cursor: grab;
+        z-index: 3;
+      }
+      .time-handle:active {
+        cursor: grabbing;
+      }
+      .cut-indicator {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        background-color: rgba(255, 0, 0, 0.3);
+        pointer-events: none;
+      }
+      .zoom-indicator {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        background-color: rgba(0, 0, 255, 0.3);
+        pointer-events: none;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BS8pGCl5.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-bJ2Tz_yA.css">
+  </head>
+  <body class="bg-background text-text m-0 p-5 lg:p-8 lg:pt-12 font-sans antialiased">
+    <div class="w-full mx-auto">
+      <div class="flex justify-between items-center mb-5">
+        <div class="flex items-center gap-2">
+          <button id="importVideoBtn" class="border border-text/20 py-1 px-5 text-sm bg-container hover:bg-button text-text hover:text-text-highlight rounded-2xl">Load Video</button>
+          <button id="addZoomBtn" class="border border-text/20 py-1 px-5 text-sm bg-container hover:bg-button text-text hover:text-text-highlight rounded-2xl">Add Zoom</button>
+          <button id="addCutBtn" class="border border-text/20 py-1 px-5 text-sm bg-container hover:bg-button text-text hover:text-text-highlight rounded-2xl">Add Cut</button>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <!-- hide this for now because it's not needed -->
+            <button id="resolutionMenuBtn" class="hidden border border-text/20 py-1 px-5 text-sm bg-container hover:bg-button text-text hover:text-text-highlight rounded-2xl flex items-center">
+              <span id="currentResolution">1280×720</span>
+              <svg class="w-4 h-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            
+            <!-- Resolution Popup -->
+            <div id="resolutionPopup" class="absolute right-0 mt-2 bg-container border border-text/20 rounded-lg shadow-lg p-4 z-10 w-64 hidden">
+              <h3 class="text-text-highlight mb-3 text-sm font-medium">Video Resolution</h3>
+              
+              <div class="flex flex-wrap gap-2 mb-3">
+                <button id="res720p" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">720p</button>
+                <button id="res1080p" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">1080p</button>
+                <button id="res1440p" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">1440p</button>
+                <button id="res4k" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">4K</button>
+              </div>
+              
+              <h3 class="text-text-highlight mb-3 text-sm font-medium">Mobile (Portrait)</h3>
+              <div class="flex flex-wrap gap-2 mb-3">
+                <button id="resMobile720p" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">720×1280</button>
+                <button id="resMobile1080p" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">1080×1920</button>
+                <button id="resMobileStory" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight">1080×1920 (9:16)</button>
+              </div>
+              
+              <div class="flex gap-2 items-end">
+                <div>
+                  <label for="customWidth" class="block text-xs mb-1">Width</label>
+                  <input type="number" id="customWidth" min="100" max="7680" value="1280" class="bg-button text-text p-1 rounded w-16 text-xs">
+                </div>
+                <div class="text-sm pb-1">×</div>
+                <div>
+                  <label for="customHeight" class="block text-xs mb-1">Height</label>
+                  <input type="number" id="customHeight" min="100" max="4320" value="720" class="bg-button text-text p-1 rounded w-16 text-xs">
+                </div>
+                <button id="applyCustomRes" class="bg-button border-none text-text py-1 px-2 text-center inline-block text-xs cursor-pointer rounded hover:text-text-highlight ml-1">Apply</button>
+              </div>
+              
+              <div class="mt-2">
+                <label class="flex items-center gap-2 text-xs">
+                  <input type="checkbox" id="maintainAspectRatio" checked class="bg-button text-text rounded">
+                  <span>Maintain aspect ratio</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Add this after the resolution popup -->
+          <div class="relative ml-2">
+            <button id="exportOptionsBtn" class="border border-text/20 py-1 px-5 text-sm bg-container hover:bg-button text-text hover:text-text-highlight rounded-2xl flex items-center">
+              <span id="currentExportOptions">Export Options</span>
+              <svg class="w-4 h-4 ml-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            
+            <!-- Export Options Popup -->
+            <div id="exportOptionsPopup" class="absolute right-0 mt-2 bg-container border border-text/20 rounded-lg shadow-lg p-4 z-10 w-64 hidden">
+              <h3 class="text-text-highlight mb-3 text-sm font-medium">Export Settings</h3>
+              
+              <div class="mb-3">
+                <label for="exportResolution" class="block text-xs mb-1">Resolution</label>
+                <select id="exportResolution" class="bg-button text-text p-2 rounded w-full text-xs">
+                  <option value="original">Original Resolution</option>
+                  <option value="1280x720" selected>1280×720 (720p)</option>
+                  <option value="1920x1080">1920×1080 (1080p)</option>
+                  <option value="2560x1440">2560×1440 (1440p)</option>
+                  <option value="3840x2160">3840×2160 (4K)</option>
+                </select>
+              </div>
+              
+              <div class="mb-3">
+                <label for="exportFormat" class="block text-xs mb-1">Format</label>
+                <select id="exportFormat" class="bg-button text-text p-2 rounded w-full text-xs">
+                  <option value="mp4" selected>MP4</option>
+                  <option value="webm">WebM</option>
+                </select>
+              </div>
+              
+              <div class="mb-3">
+                <label for="objectFit" class="block text-xs mb-1">Object Fit</label>
+                <div class="flex flex-col gap-2 mt-1">
+                  <button id="fitContain" class="bg-button border-none text-text py-1 px-2 text-left text-xs cursor-pointer rounded hover:text-text-highlight flex items-center">
+                    <span class="mr-2">Contain</span>
+                    <span class="text-xs text-text/60">Show all</span>
+                  </button>
+                  <button id="fitCover" class="bg-button border-none text-text py-1 px-2 text-left text-xs cursor-pointer rounded hover:text-text-highlight flex items-center">
+                    <span class="mr-2">Cover</span>
+                    <span class="text-xs text-text/60">Fill frame</span>
+                  </button>
+                </div>
+              </div>
+              
+              <div id="exportProgress" class="w-full h-3 bg-container/60 rounded-full mb-4 hidden">
+                <div id="exportProgressBar" class="h-full bg-button/80 rounded-full" style="width: 0%"></div>
+              </div>
+              <div id="exportStatus" class="text-sm mb-3 text-text/70"></div>
+            </div>
+          </div>
+          
+          <button id="exportVideoBtn" class="border border-text/20 py-1 px-5 text-sm bg-container hover:bg-button text-text hover:text-text-highlight rounded-2xl flex items-center">
+            <svg id="exportSpinner" aria-hidden="true" role="status" class="hidden mr-2 w-4 h-4 text-text animate-spin" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="#E5E7EB"></path>
+              <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentColor"></path>
+            </svg>
+            <span id="exportBtnText">Export</span>
+          </button>
+        </div>
+      </div>
+      <div class="flex gap-8 mb-5">
+        <div id="sketch-holder" class="bg-container w-3/4 flex items-center justify-center grow-0 shrink-0 rounded-2xl overflow-hidden"></div>
+        <div id="side-panel" class="grow-1 bg-container rounded-2xl p-6 flex flex-col gap-4">
+          <div id="noEditMessage" class="text-sm flex items-center justify-center h-full">
+            <p class="text-text/60">No edit selected</p>
+          </div>
+          <div id="zoomConfig" class="text-sm hidden">
+            <h2 class="text-text-highlight mb-4">Zoom Region</h2>
+            <div class="flex flex-col gap-3">
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <label for="zoomStartTime" class="block mb-1">Start Time (s)</label>
+                  <input type="number" id="zoomStartTime" min="0" step="0.1" class="bg-button text-text p-2 rounded w-full" value="0">
+                </div>
+                <div class="flex-1">
+                  <label for="zoomEndTime" class="block mb-1">End Time (s)</label>
+                  <input type="number" id="zoomEndTime" min="0" step="0.1" class="bg-button text-text p-2 rounded w-full" value="0">
+                </div>
+              </div>
+              <div>
+                <label for="zoomDuration" class="block mb-1">Animation Duration (seconds)</label>
+                <input type="number" id="zoomDuration" min="0" step="0.1" class="bg-button text-text p-2 rounded w-full" value="0.5">
+              </div>
+              <div>
+                <label for="zoomLevel" class="block mb-1">Zoom Level</label>
+                <input type="number" id="zoomLevel" min="1" step="0.1" class="bg-button text-text p-2 rounded w-full" value="1">
+              </div>
+              <div class="flex gap-3">
+                <div class="flex-1">
+                  <label for="zoomCenterX" class="block mb-1">Center X (%)</label>
+                  <input type="number" id="zoomCenterX" min="0" max="100" class="bg-button text-text p-2 rounded w-full" value="50">
+                </div>
+                <div class="flex-1">
+                  <label for="zoomCenterY" class="block mb-1">Center Y (%)</label>
+                  <input type="number" id="zoomCenterY" min="0" max="100" class="bg-button text-text p-2 rounded w-full" value="50">
+                </div>
+              </div>
+              <div class="mt-2">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" id="showZoomRegion" class="bg-button text-text rounded">
+                  <span>Show/Move Region</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div id="cutConfig" class="text-sm hidden">
+            <h2 class="text-text-highlight mb-4">Cut Segment</h2>
+            <div class="flex flex-col gap-3">
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <label for="cutStartTime" class="block mb-1">Start Time (s)</label>
+                  <input type="number" id="cutStartTime" min="0" step="0.1" class="bg-button text-text p-2 rounded w-full" value="0">
+                </div>
+                <div class="flex-1">
+                  <label for="cutEndTime" class="block mb-1">End Time (s)</label>
+                  <input type="number" id="cutEndTime" min="0" step="0.1" class="bg-button text-text p-2 rounded w-full" value="0">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-2 mb-2">
+        <button id="playPauseBtn" class="w-10 h-10 border border-text/20 rounded-full bg-container hover:bg-button flex items-center justify-center">
+          <svg id="playIcon" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          <svg id="pauseIcon" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+        </button>
+        <div id="current-time-display" class="text-text-highlight text-base">0:00</div>
+      </div>
+      <div id="timeline" class="h-[50px] bg-container relative mb-6 rounded-2xl">
+        <!-- Add timeline progress indicator -->
+        <div class="bg-[#6666FF]/30 h-full rounded-2xl" id="timeline-progress"></div>
+        <div class="time-indicator" id="time-indicator"></div>
+        <div class="time-handle" id="time-handle"></div>
+      </div>
+
+      <div class="bg-container p-6 rounded-2xl mb-6">
+        <h2 class="text-sm text-text-highlight mb-4">Edit Timeline</h2>
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left font-normal border-b border-text/20">
+              <th class="py-2 px-4 font-normal">ID</th>
+              <th class="py-2 px-4 font-normal">Type</th>
+              <th class="py-2 px-4 font-normal">Start Time</th>
+              <th class="py-2 px-4 font-normal">End Time</th>
+              <th class="py-2 px-4 font-normal">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="editsTable">
+            <!-- Rows will be added here dynamically -->
+          </tbody>
+        </table>
+      </div>
+      <!-- hiding the below stuff because they will be removed soon -->
+      <div class=" hidden flex flex-wrap gap-2.5 mb-5">
+        <div class="bg-container p-4 rounded flex-1 min-w-[250px] mb-4">
+          <h2 class="mt-0 text-lg text-text-highlight">Video Source</h2>
+          <input type="file" id="videoInput" accept="video/*" class="mb-2.5 border-text" data-default-video="/atom-game.mp4">
+          <div>
+            <button id="resetBtn" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Reset</button>
+          </div>
+        </div>
+        
+        <div class="bg-container p-4 rounded flex-1 min-w-[250px] mb-4">
+          <h2 class="mt-0 text-lg text-text-highlight">Trim Video</h2>
+          <div class="my-2.5">
+            <label for="trimStart" class="block mb-1">Start Time: <span id="trimStartValue">0.0</span>s</label>
+            <input type="range" id="trimStart" min="0" max="100" value="0" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="trimEnd" class="block mb-1">End Time: <span id="trimEndValue">0.0</span>s</label>
+            <input type="range" id="trimEnd" min="0" max="100" value="100" class="w-full">
+          </div>
+        </div>
+        
+        <div class="bg-container p-4 rounded flex-1 min-w-[250px] mb-4">
+          <h2 class="mt-0 text-lg text-text-highlight">Remove Segments</h2>
+          <button id="markCutStart" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Mark Cut Start</button>
+          <button id="markCutEnd" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Mark Cut End</button>
+          <button id="addCut" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Add Cut</button>
+          <button id="clearCuts" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Clear All Cuts</button>
+          <div id="cutsList"></div>
+        </div>
+        
+        <div class="bg-container p-4 rounded flex-1 min-w-[250px] mb-4">
+          <h2 class="mt-0 text-lg text-text-highlight">Zoom Region</h2>
+          <button id="markZoomStart" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Mark Zoom Start at Current Time</button>
+          <button id="markZoomEnd" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Mark Zoom End at Current Time</button>
+          <div class="my-2.5">
+            <label for="zoomStartTime" class="block mb-1">Start Time: <span id="zoomStartValue">0.0</span>s</label>
+            <input type="range" id="zoomStartTime" min="0" max="100" value="0" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="zoomEndTime" class="block mb-1">End Time: <span id="zoomEndValue">0.0</span>s</label>
+            <input type="range" id="zoomEndTime" min="0" max="100" value="0" class="w-full">
+          </div>
+          <button id="setZoomRegion" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Set Zoom Region</button>
+          <button id="clearZoom" class="bg-button border-none text-text py-2 px-4 text-center inline-block text-sm m-1 cursor-pointer rounded hover:text-text-highlight">Clear Zoom</button>
+        </div>
+        
+        <div class="bg-container p-4 rounded flex-1 min-w-[250px] mb-4">
+          <h2 class="mt-0 text-lg text-text-highlight">Overlay Video</h2>
+          <input type="file" id="overlayInput" accept="video/*" class="mb-2.5">
+          <div class="my-2.5">
+            <label for="overlayStartTime" class="block mb-1">Start Time: <span id="overlayStartValue">0.0</span>s</label>
+            <input type="range" id="overlayStartTime" min="0" max="100" value="0" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="overlayEndTime" class="block mb-1">End Time: <span id="overlayEndValue">0.0</span>s</label>
+            <input type="range" id="overlayEndTime" min="0" max="100" value="0" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="overlayX" class="block mb-1">X Position: <span id="overlayXValue">50</span></label>
+            <input type="range" id="overlayX" min="0" max="100" value="50" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="overlayY" class="block mb-1">Y Position: <span id="overlayYValue">50</span></label>
+            <input type="range" id="overlayY" min="0" max="100" value="50" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="overlayWidth" class="block mb-1">Width: <span id="overlayWidthValue">200</span>px</label>
+            <input type="range" id="overlayWidth" min="50" max="400" value="200" class="w-full">
+          </div>
+          <div class="my-2.5">
+            <label for="overlayHeight" class="block mb-1">Height: <span id="overlayHeightValue">150</span>px</label>
+            <input type="range" id="overlayHeight" min="50" max="300" value="150" class="w-full">
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-6Z5F1MTLYX"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-6Z5F1MTLYX');
+</script>
+  </body>
+</html>
