@@ -55,8 +55,15 @@
         background-color: rgba(0, 0, 255, 0.3);
         pointer-events: none;
       }
+      .active-option {
+        background-color: #6666FF !important;
+        color: white !important;
+      }
+      .active-option .text-text\/60 {
+        color: rgba(255, 255, 255, 0.8) !important;
+      }
     </style>
-    <script type="module" crossorigin src="./assets/index-BS8pGCl5.js"></script>
+    <script type="module" crossorigin src="./assets/index-CT5yDGpr.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-bJ2Tz_yA.css">
   </head>
   <body class="bg-background text-text m-0 p-5 lg:p-8 lg:pt-12 font-sans antialiased">
@@ -150,14 +157,14 @@
               </div>
               
               <div class="mb-3">
-                <label for="objectFit" class="block text-xs mb-1">Object Fit</label>
+                <label for="objectFit" class="block text-xs mb-1">Crop Options</label>
                 <div class="flex flex-col gap-2 mt-1">
-                  <button id="fitContain" class="bg-button border-none text-text py-1 px-2 text-left text-xs cursor-pointer rounded hover:text-text-highlight flex items-center">
-                    <span class="mr-2">Contain</span>
+                  <button id="fitContain" class="bg-button border-none text-text py-1 px-2 text-left text-xs cursor-pointer rounded hover:text-text-highlight flex items-center active-option">
+                    <span class="mr-2">Fit</span>
                     <span class="text-xs text-text/60">Show all</span>
                   </button>
                   <button id="fitCover" class="bg-button border-none text-text py-1 px-2 text-left text-xs cursor-pointer rounded hover:text-text-highlight flex items-center">
-                    <span class="mr-2">Cover</span>
+                    <span class="mr-2">Fill</span>
                     <span class="text-xs text-text/60">Fill frame</span>
                   </button>
                 </div>
